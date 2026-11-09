@@ -1,0 +1,95 @@
+{
+  "schema": "biobridge.descriptor/v1",
+  "id": "biobridge-node-a",
+  "name": "BioBridge Node A (ECG, USB-serial)",
+  "description": "ESP32 + AD8232 single-lead ECG at 250 Hz. BioBridge frames over USB-serial; samples are AD8232 output-pin millivolts, mapped to electrode mV assuming the module's gain of 100 around a 1.65 V mid-rail.",
+  "transport": { "kind": "serial", "baudRate": 115200 },
+  "framing": {
+    "kind": "magic-length-crc",
+    "magic": [177, 11],
+    "lengthOffset": 10,
+    "lengthType": "u8",
+    "headerLength": 11,
+    "crc": { "kind": "crc16-ccitt-false", "start": 2, "endian": "le" },
+    "maxFrameLength": 268
+  },
+  "messages": [
+    {
+      "name": "hello",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 1 }
+      ],
+      "info": true,
+      "fields": [
+        { "kind": "scalar", "offset": 11, "type": "u8", "channel": "protocol" },
+        { "kind": "scalar", "offset": 12, "type": "u8", "channel": "nodeKind" },
+        { "kind": "scalar", "offset": 13, "type": "u16le", "channel": "sampleRateHz" },
+        { "kind": "scalar", "offset": 15, "type": "u8", "channel": "fwMajor" },
+        { "kind": "scalar", "offset": 16, "type": "u8", "channel": "fwMinor" },
+        { "kind": "hex", "offset": 17, "length": 6, "channel": "mac" }
+      ]
+    },
+    {
+      "name": "samples",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 2 }
+      ],
+      "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "send" },
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": [
+        {
+          "kind": "samples",
+          "offset": 14,
+          "type": "i16le",
+          "stride": 2,
+          "count": { "offset": 11, "type": "u8" },
+          "periodUs": { "offset": 12, "type": "u16le" },
+          "channel": "ecg",
+          "scale": 0.01,
+          "bias": -16.5,
+          "unit": "mV"
+        }
+      ]
+    },
+    {
+      "name": "syncEvent",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 3 }
+      ],
+      "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "event" },
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": [
+        { "kind": "scalar", "offset": 11, "type": "u8", "channel": "syncEvent" }
+      ]
+    },
+    {
+      "name": "leadsOff",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 4 }
+      ],
+      "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "event" },
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": [
+        { "kind": "scalar", "offset": 11, "type": "u8", "channel": "leadsOff" }
+      ]
+    },
+    {
+      "name": "timeProbe",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 5 }
+      ],
+      "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "send" },
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": []
+    }
+  ],
+  "channels": [
+    { "id": "ecg", "label": "ECG", "unit": "mV", "display": "waveform" },
+    { "id": "leadsOff", "label": "Leads off (bit0 LO+, bit1 LO−)", "display": "scalar" },
+    { "id": "syncEvent", "label": "Sync pulse edge", "display": "hidden" }
+  ],
+  "plausibility": {
+    "ecg": { "min": -5, "max": 5 },
+    "leadsOff": { "min": 0, "max": 3 }
+  }
+}

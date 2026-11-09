@@ -1,0 +1,282 @@
+{
+  "recording": {
+    "name": "simulated Node A + Node B, 1800 s",
+    "durationS": 1799.967145751953,
+    "connections": [
+      {
+        "key": "c1",
+        "label": "Node A (serial)",
+        "transport": "simulated"
+      },
+      {
+        "key": "c2",
+        "label": "Node B (BLE)",
+        "transport": "simulated"
+      }
+    ]
+  },
+  "warmupS": 10,
+  "hasTruth": true,
+  "methods": [
+    {
+      "method": "first-offset",
+      "pulsePairs": [
+        {
+          "pair": "Node A (serial) − Node B (BLE)",
+          "stats": {
+            "n": 3572,
+            "meanMs": 15.93951600556411,
+            "rmseMs": 18.990954779339283,
+            "sdMs": 10.324155797898207,
+            "p95AbsMs": 32.023681640625,
+            "maxAbsMs": 33.797607421875
+          }
+        }
+      ],
+      "absolute": [
+        {
+          "connection": "Node B (BLE)",
+          "stats": {
+            "n": 48395,
+            "meanMs": 3.7802370547706374,
+            "rmseMs": 3.9190501940722826,
+            "sdMs": 1.0338095730824954,
+            "p95AbsMs": 5.390869140625,
+            "maxAbsMs": 5.5693359375
+          }
+        },
+        {
+          "connection": "Node A (serial)",
+          "stats": {
+            "n": 57296,
+            "meanMs": 19.688378486111322,
+            "rmseMs": 21.773926651339686,
+            "sdMs": 9.299012550026454,
+            "p95AbsMs": 34.179931640625,
+            "maxAbsMs": 35.79443359375
+          }
+        }
+      ],
+      "ptt": {
+        "stats": {
+          "n": 2149,
+          "meanMs": 267.9574815866391,
+          "rmseMs": 268.18711033538403,
+          "sdMs": 11.095684376792857,
+          "p95AbsMs": 285.1943359375,
+          "maxAbsMs": 293.1943359375
+        },
+        "errorVsTruth": {
+          "n": 2149,
+          "meanMs": -15.882209362457829,
+          "rmseMs": 18.954503024856262,
+          "sdMs": 10.345463290077545,
+          "p95AbsMs": 32.018798828125,
+          "maxAbsMs": 33.786865234375
+        }
+      }
+    },
+    {
+      "method": "windowed-min",
+      "pulsePairs": [
+        {
+          "pair": "Node A (serial) − Node B (BLE)",
+          "stats": {
+            "n": 3572,
+            "meanMs": -0.1964875463675812,
+            "rmseMs": 0.8570341289519856,
+            "sdMs": 0.8342062948161781,
+            "p95AbsMs": 1.833251953125,
+            "maxAbsMs": 3.83056640625
+          }
+        }
+      ],
+      "absolute": [
+        {
+          "connection": "Node B (BLE)",
+          "stats": {
+            "n": 48395,
+            "meanMs": 1.646523703862744,
+            "rmseMs": 1.8469352295214991,
+            "sdMs": 0.8367373749664487,
+            "p95AbsMs": 3.27294921875,
+            "maxAbsMs": 5.25439453125
+          }
+        },
+        {
+          "connection": "Node A (serial)",
+          "stats": {
+            "n": 57296,
+            "meanMs": 1.4462789084384708,
+            "rmseMs": 1.449074080308017,
+            "sdMs": 0.08996115398632214,
+            "p95AbsMs": 1.634521484375,
+            "maxAbsMs": 1.9462890625
+          }
+        }
+      ],
+      "ptt": {
+        "stats": {
+          "n": 2149,
+          "meanMs": 284.0476744497804,
+          "rmseMs": 284.075258555566,
+          "sdMs": 3.9586819881424296,
+          "p95AbsMs": 290.638916015625,
+          "maxAbsMs": 296.55126953125
+        },
+        "errorVsTruth": {
+          "n": 2149,
+          "meanMs": 0.20798350068345742,
+          "rmseMs": 0.8731588831473761,
+          "sdMs": 0.8480267086965053,
+          "p95AbsMs": 1.880615234375,
+          "maxAbsMs": 3.83740234375
+        }
+      }
+    },
+    {
+      "method": "lower-hull",
+      "pulsePairs": [
+        {
+          "pair": "Node A (serial) − Node B (BLE)",
+          "stats": {
+            "n": 3572,
+            "meanMs": 0.7944116539010009,
+            "rmseMs": 0.8398792100211163,
+            "sdMs": 0.2725934914336196,
+            "p95AbsMs": 1.17578125,
+            "maxAbsMs": 2.4208984375
+          }
+        }
+      ],
+      "absolute": [
+        {
+          "connection": "Node B (BLE)",
+          "stats": {
+            "n": 48395,
+            "meanMs": 0.5375953861129765,
+            "rmseMs": 0.6029399327358916,
+            "sdMs": 0.27299773500452573,
+            "p95AbsMs": 0.927490234375,
+            "maxAbsMs": 3.86767578125
+          }
+        },
+        {
+          "connection": "Node A (serial)",
+          "stats": {
+            "n": 57296,
+            "meanMs": 1.3324505961230932,
+            "rmseMs": 1.332482711193878,
+            "sdMs": 0.009251190291042242,
+            "p95AbsMs": 1.350341796875,
+            "maxAbsMs": 1.381103515625
+          }
+        }
+      ],
+      "ptt": {
+        "stats": {
+          "n": 2149,
+          "meanMs": 283.04509717001366,
+          "rmseMs": 283.0713385585346,
+          "sdMs": 3.854306855717037,
+          "p95AbsMs": 289.36767578125,
+          "maxAbsMs": 294.231689453125
+        },
+        "errorVsTruth": {
+          "n": 2149,
+          "meanMs": -0.7945937790832945,
+          "rmseMs": 0.8402716594744082,
+          "sdMs": 0.27327127173928156,
+          "p95AbsMs": 1.177490234375,
+          "maxAbsMs": 2.345703125
+        }
+      }
+    },
+    {
+      "method": "lower-hull-transport",
+      "pulsePairs": [
+        {
+          "pair": "Node A (serial) − Node B (BLE)",
+          "stats": {
+            "n": 3572,
+            "meanMs": -0.32208983281424974,
+            "rmseMs": 0.4221060094166456,
+            "sdMs": 0.27282159515576104,
+            "p95AbsMs": 0.70263671875,
+            "maxAbsMs": 3.578125
+          }
+        }
+      ],
+      "absolute": [
+        {
+          "connection": "Node B (BLE)",
+          "stats": {
+            "n": 48395,
+            "meanMs": 0.5221334525777457,
+            "rmseMs": 0.5886743600056121,
+            "sdMs": 0.2718715870172166,
+            "p95AbsMs": 0.9033203125,
+            "maxAbsMs": 3.8447265625
+          }
+        },
+        {
+          "connection": "Node A (serial)",
+          "stats": {
+            "n": 57296,
+            "meanMs": 0.2003340477452069,
+            "rmseMs": 0.2003366606977036,
+            "sdMs": 0.0010231976974049283,
+            "p95AbsMs": 0.201904296875,
+            "maxAbsMs": 0.2060546875
+          }
+        }
+      ],
+      "ptt": {
+        "stats": {
+          "n": 2149,
+          "meanMs": 284.1617177729831,
+          "rmseMs": 284.18785419366816,
+          "sdMs": 3.8541696264034284,
+          "p95AbsMs": 290.471435546875,
+          "maxAbsMs": 295.360107421875
+        },
+        "errorVsTruth": {
+          "n": 2149,
+          "meanMs": 0.3220268238861098,
+          "rmseMs": 0.4225233609912379,
+          "sdMs": 0.27354106690066915,
+          "p95AbsMs": 0.701416015625,
+          "maxAbsMs": 3.502685546875
+        }
+      }
+    },
+    {
+      "method": "truth",
+      "pulsePairs": [
+        {
+          "pair": "Node A (serial) − Node B (BLE)",
+          "stats": {
+            "n": 3572,
+            "meanMs": 0.00003759164158734602,
+            "rmseMs": 0.0014367682767074334,
+            "sdMs": 0.001436276418185447,
+            "p95AbsMs": 0.002685546875,
+            "maxAbsMs": 0.00390625
+          }
+        }
+      ],
+      "absolute": [],
+      "ptt": {
+        "stats": {
+          "n": 2149,
+          "meanMs": 283.83969094909696,
+          "rmseMs": 283.8656973978679,
+          "sdMs": 3.842395229414717,
+          "p95AbsMs": 290.13623046875,
+          "maxAbsMs": 295.344482421875
+        },
+        "errorVsTruth": null
+      }
+    }
+  ]
+}

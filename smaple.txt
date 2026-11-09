@@ -1,0 +1,18 @@
+You are an expert software developer, ML and AI reseracher and a academic expert in the domain of edge device computing. You 
+job will be to do reserach, build product, make ppt for the same, make it presentable and all. 
+
+For today we are build and doing reserach on following - 
+A general software which can compute anything that we get form the egde device. 
+
+We want a general way to build and connect to any edge device (mostly biomedical devices and etc).
+
+My team B19 
+Name and ROll number 
+KOMMANA SRI KRISHNA RAMESH | 23ECB0B19 | 
+BIBEK CHAUDHARY | 23ECB0F33 | 
+ABHINAV MAGESH | 23ECB0F25
+
+Make 3 things for now 
+A reserach doc
+A latex ppt for the same 
+a app (with UI)

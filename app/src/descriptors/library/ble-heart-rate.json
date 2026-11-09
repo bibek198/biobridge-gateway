@@ -1,0 +1,41 @@
+{
+  "schema": "biobridge.descriptor/v1",
+  "id": "ble-heart-rate",
+  "name": "BLE Heart Rate Monitor (0x180D)",
+  "description": "Any device exposing the standard Bluetooth Heart Rate Service. Heart Rate Measurement (0x2A37): flags bit0 selects a u8 or u16 heart-rate value.",
+  "transport": { "kind": "ble", "service": "heart_rate", "characteristic": "heart_rate_measurement" },
+  "framing": { "kind": "per-chunk" },
+  "messages": [
+    {
+      "name": "heartRateMeasurement",
+      "fields": [
+        {
+          "kind": "scalar",
+          "offset": 1,
+          "type": "u8",
+          "channel": "heartRate",
+          "unit": "bpm",
+          "when": [
+            { "offset": 0, "type": "u8", "mask": 1, "equals": 0 }
+          ]
+        },
+        {
+          "kind": "scalar",
+          "offset": 1,
+          "type": "u16le",
+          "channel": "heartRate",
+          "unit": "bpm",
+          "when": [
+            { "offset": 0, "type": "u8", "mask": 1, "equals": 1 }
+          ]
+        }
+      ]
+    }
+  ],
+  "channels": [
+    { "id": "heartRate", "label": "Heart Rate (device)", "unit": "bpm", "display": "scalar" }
+  ],
+  "plausibility": {
+    "heartRate": { "min": 25, "max": 250, "maxRatePerSec": 30 }
+  }
+}

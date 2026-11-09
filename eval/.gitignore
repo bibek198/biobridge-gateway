@@ -1,0 +1,2 @@
+# Simulator recordings are reproducible from their seed (see app/test/syncEval.test.ts) and large.
+results/**/recording.bbrec.jsonl

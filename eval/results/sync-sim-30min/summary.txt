@@ -1,0 +1,6 @@
+5 seeds × 30 min simulated; mean RMSE over seeds (ms). Same seeds with timing probes on and off.
+method                    pulse:on pulse:off    PTT:on   PTT:off
+first-offset                 18.73     18.74     18.70     18.72
+windowed-min                  0.76      1.41      0.77      1.43
+lower-hull                    0.86      1.04      0.86      1.04
+lower-hull-transport          0.37      1.22      0.37      1.22

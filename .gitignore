@@ -1,0 +1,50 @@
+# --- Secrets: never commit. Copy .env.example to .env and fill it in locally. ---
+.env
+.env.*
+!.env.example
+
+# --- Unpublished research: paper drafts and the research plan stay local until publication. ---
+docs/
+
+# --- Personal data: recordings can contain people's ECG/PPG. Share them deliberately, not by default. ---
+*.bbrec.jsonl
+
+# --- OS and editors ---
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# --- Node / Vite (app/.gitignore covers the app too) ---
+node_modules/
+dist/
+*.local
+*.tsbuildinfo
+coverage/
+
+# --- PlatformIO build output ---
+firmware/.pio/
+firmware/.vscode/
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- LaTeX build intermediates (the .tex sources and final .pdf files are kept) ---
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
+
+# --- Claude Code: shared project settings are committed, personal ones are not ---
+.claude/settings.local.json

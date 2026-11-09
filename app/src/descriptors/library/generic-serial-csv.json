@@ -1,0 +1,20 @@
+{
+  "schema": "biobridge.descriptor/v1",
+  "id": "generic-serial-csv",
+  "name": "Generic Serial Sensor (CSV)",
+  "description": "Any USB-serial device printing one \"channel,value\" line per reading, e.g. \"ecg,0.42\" or \"spo2,97\" (Arduino Serial.println).",
+  "transport": { "kind": "serial", "baudRate": 115200 },
+  "framing": { "kind": "delimited", "delimiter": "\n" },
+  "text": { "separator": ",", "mode": "channel-value" },
+  "channels": [
+    { "id": "ecg", "label": "ECG", "unit": "mV", "display": "waveform" },
+    { "id": "heartRate", "label": "Heart Rate (device)", "unit": "bpm", "display": "scalar" },
+    { "id": "spo2", "label": "SpO2", "unit": "%", "display": "scalar" },
+    { "id": "bp_systolic", "label": "Blood Pressure Systolic", "unit": "mmHg", "display": "scalar" },
+    { "id": "bp_diastolic", "label": "Blood Pressure Diastolic", "unit": "mmHg", "display": "scalar" }
+  ],
+  "plausibility": {
+    "heartRate": { "min": 25, "max": 250 },
+    "spo2": { "min": 50, "max": 100 }
+  }
+}

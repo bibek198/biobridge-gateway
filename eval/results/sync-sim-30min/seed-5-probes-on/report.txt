@@ -1,0 +1,26 @@
+simulated Node A + Node B, 1800 s: 1800 s, warm-up 10 s excluded, simulator truth available
+
+Pulse-pair sync error (device a − device b), ms
+method                        n    mean    rmse      sd  p95|e|  max|e|
+first-offset               3586    5.69    7.03    4.13   12.15   12.85
+windowed-min               3586    0.03    0.78    0.78    1.49    3.62
+lower-hull                 3586    0.86    0.89    0.23    1.25    1.70
+lower-hull-transport       3586   -0.26    0.34    0.23    0.60    1.04
+truth                      3586    0.00    0.00    0.00    0.00    0.00
+
+Absolute mapping error vs simulator truth, ms (includes the unobservable minimum one-way delay)
+first-offset / Node A (serial)                   mean   17.55 rmse   19.18 max   30.97
+first-offset / Node B (BLE)                      mean   11.86 rmse   12.40 max   18.12
+windowed-min / Node A (serial)                   mean    1.45 rmse    1.45 max    1.98
+windowed-min / Node B (BLE)                      mean    1.40 rmse    1.59 max    5.01
+lower-hull / Node A (serial)                     mean    1.33 rmse    1.33 max    1.53
+lower-hull / Node B (BLE)                        mean    0.48 rmse    0.53 max    1.25
+lower-hull-transport / Node A (serial)           mean    0.20 rmse    0.20 max    0.21
+lower-hull-transport / Node B (BLE)              mean    0.46 rmse    0.51 max    1.24
+
+Pulse transit time (ECG R-peak → PPG max upstroke), ms
+first-offset             n= 2146 mean  278.21 sd    5.57   error vs truth: mean   -5.68 rmse    7.03 max   12.84
+windowed-min             n= 2146 mean  283.84 sd    4.05   error vs truth: mean   -0.05 rmse    0.77 max    3.54
+lower-hull               n= 2146 mean  283.03 sd    4.01   error vs truth: mean   -0.86 rmse    0.89 max    1.71
+lower-hull-transport     n= 2146 mean  284.15 sd    4.02   error vs truth: mean    0.26 rmse    0.34 max    1.03
+truth                    n= 2146 mean  283.89 sd    4.02
