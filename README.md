@@ -2,13 +2,7 @@
 
 **One gateway for many medical sensors: connect any device, read its data correctly, keep every device on the same clock, and decide where the computing happens.**
 
-BioBridge is a B.Tech project by **Team B19**:
-
-- Kommana Sri Krishna Ramesh (23ECB0B19)
-- Bibek Chaudhary (23ECB0F33)
-- Abhinav Magesh (23ECB0F25)
-
-It combines embedded firmware (ESP32), a browser-based gateway (TypeScript/React, WebAssembly), a shared signal-processing library in C, and two research directions.
+BioBridge combines embedded firmware (ESP32), a browser-based gateway (TypeScript/React, WebAssembly), a shared signal-processing library in C, and two research directions.
 
 > ⚠️ **Research prototype, not a medical device.** Nothing here is for diagnosis or treatment. Values like SpO2 use uncalibrated textbook formulas. When recording ECG from a person, power the laptop from its battery, not from the mains.
 
@@ -380,7 +374,7 @@ The recorder stores the **raw bytes** each device sent, not the decoded values, 
 ## 6. Repository layout
 
 ```
-btech-project/
+biobridge/
 ├── app/                      Browser gateway (TypeScript, React, Vite)
 │   ├── src/
 │   │   ├── transports/       Web Serial, Web Bluetooth, simulated devices, replay
