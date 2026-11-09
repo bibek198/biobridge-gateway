@@ -22,6 +22,7 @@ interface Navigator {
 interface BluetoothRemoteGATTCharacteristic extends EventTarget {
   readonly value?: DataView;
   startNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
+  writeValueWithResponse(value: BufferSource): Promise<void>;
   stopNotifications(): Promise<BluetoothRemoteGATTCharacteristic>;
 }
 

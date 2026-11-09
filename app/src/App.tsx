@@ -7,6 +7,7 @@ import { PipelinePanel } from "./components/PipelinePanel";
 import { RecordingsPanel } from "./components/RecordingsPanel";
 import { AlertLog } from "./components/AlertLog";
 import { SyncPanel } from "./components/SyncPanel";
+import { PlacementPanel } from "./components/PlacementPanel";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           { id: "connect", label: "Devices", content: <ErrorBoundary><ConnectPanel /></ErrorBoundary> },
           { id: "live", label: "Live Data", content: <ErrorBoundary><LiveDataPanel /></ErrorBoundary> },
           { id: "sync", label: "Clock Sync", content: <ErrorBoundary><SyncPanel /></ErrorBoundary> },
+          { id: "placement", label: "Compute Placement", content: <ErrorBoundary><PlacementPanel /></ErrorBoundary> },
           { id: "pipeline", label: "Compute Pipeline", content: <ErrorBoundary><PipelinePanel /></ErrorBoundary> },
           { id: "recordings", label: "Recordings", content: <ErrorBoundary><RecordingsPanel /></ErrorBoundary> },
           { id: "alerts", label: "Alert Log", content: <ErrorBoundary><AlertLog /></ErrorBoundary> },

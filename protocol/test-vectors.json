@@ -158,6 +158,54 @@
       "expect": {
         "samples": []
       }
+    },
+    {
+      "name": "node_b_derived_spo2",
+      "descriptor": "biobridge-node-b",
+      "type": 6,
+      "seq": 10,
+      "device_ts_us": 16384,
+      "payload_hex": "050000c142",
+      "frame_hex": "b10b01060a000040000005050000c1424e32",
+      "expect": {
+        "samples": [
+          {
+            "channel": "spo2_edge",
+            "value": 96.5,
+            "deviceTimestampUs": 4294983680
+          }
+        ]
+      }
+    },
+    {
+      "name": "node_a_stats",
+      "descriptor": "biobridge-node-a",
+      "type": 7,
+      "seq": 4,
+      "device_ts_us": 2100000,
+      "payload_hex": "0139300000a60200008813",
+      "frame_hex": "b10b01070400200b20000b0139300000a60200008813c834",
+      "expect": {
+        "samples": [],
+        "info": {
+          "mode": 1,
+          "dspUs": 12345,
+          "txBytes": 678,
+          "statsPeriodMs": 5000
+        }
+      }
+    },
+    {
+      "name": "config_mode_edge",
+      "descriptor": "biobridge-node-a",
+      "type": 16,
+      "seq": 0,
+      "device_ts_us": 0,
+      "payload_hex": "01",
+      "frame_hex": "b10b0110000000000000010192fe",
+      "expect": {
+        "samples": []
+      }
     }
   ]
 }

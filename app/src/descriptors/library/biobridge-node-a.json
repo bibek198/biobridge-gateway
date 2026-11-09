@@ -2,7 +2,7 @@
   "schema": "biobridge.descriptor/v1",
   "id": "biobridge-node-a",
   "name": "BioBridge Node A (ECG, USB-serial)",
-  "description": "ESP32 + AD8232 single-lead ECG at 250 Hz. BioBridge frames over USB-serial; samples are AD8232 output-pin millivolts, mapped to electrode mV assuming the module's gain of 100 around a 1.65 V mid-rail.",
+  "description": "ESP32 + AD8232 single-lead ECG at 250 Hz. BioBridge frames over USB-serial; samples are AD8232 output-pin millivolts, mapped to electrode mV assuming the module's gain of 100 around a 1.65 V mid-rail. Supports compute placement: raw samples, on-device ECG processing (R-peaks and heart rate), or both.",
   "transport": { "kind": "serial", "baudRate": 115200 },
   "framing": {
     "kind": "magic-length-crc",
@@ -20,6 +20,7 @@
         { "offset": 3, "type": "u8", "equals": 1 }
       ],
       "info": true,
+      "seq": { "offset": 4, "type": "u16le" },
       "fields": [
         { "kind": "scalar", "offset": 11, "type": "u8", "channel": "protocol" },
         { "kind": "scalar", "offset": 12, "type": "u8", "channel": "nodeKind" },
@@ -81,15 +82,86 @@
       "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "send" },
       "seq": { "offset": 4, "type": "u16le" },
       "fields": []
+    },
+    {
+      "name": "rPeakEdge",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 6 },
+        { "offset": 11, "type": "u8", "equals": 1 }
+      ],
+      "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "event" },
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": [
+        { "kind": "scalar", "offset": 12, "type": "f32le", "channel": "rPeak_edge", "unit": "mV" }
+      ]
+    },
+    {
+      "name": "heartRateEdge",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 6 },
+        { "offset": 11, "type": "u8", "equals": 2 }
+      ],
+      "timestamp": { "offset": 6, "type": "u32le", "unit": "us", "sentAt": "event" },
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": [
+        { "kind": "scalar", "offset": 12, "type": "f32le", "channel": "heartRate_edge", "unit": "bpm" }
+      ]
+    },
+    {
+      "name": "stats",
+      "match": [
+        { "offset": 3, "type": "u8", "equals": 7 }
+      ],
+      "info": true,
+      "seq": { "offset": 4, "type": "u16le" },
+      "fields": [
+        { "kind": "scalar", "offset": 11, "type": "u8", "channel": "mode" },
+        { "kind": "scalar", "offset": 12, "type": "u32le", "channel": "dspUs" },
+        { "kind": "scalar", "offset": 16, "type": "u32le", "channel": "txBytes" },
+        { "kind": "scalar", "offset": 20, "type": "u16le", "channel": "statsPeriodMs" }
+      ]
     }
   ],
   "channels": [
     { "id": "ecg", "label": "ECG", "unit": "mV", "display": "waveform" },
     { "id": "leadsOff", "label": "Leads off (bit0 LO+, bit1 LO−)", "display": "scalar" },
-    { "id": "syncEvent", "label": "Sync pulse edge", "display": "hidden" }
+    { "id": "syncEvent", "label": "Sync pulse edge", "display": "hidden" },
+    {
+      "id": "heartRate_edge",
+      "label": "Heart Rate (computed on device)",
+      "unit": "bpm",
+      "display": "scalar"
+    },
+    { "id": "rPeak_edge", "label": "R-peak (device)", "unit": "mV", "display": "hidden" }
   ],
   "plausibility": {
     "ecg": { "min": -5, "max": 5 },
     "leadsOff": { "min": 0, "max": 3 }
-  }
+  },
+  "commands": [
+    {
+      "id": "mode-raw",
+      "label": "Raw: compute in the browser",
+      "description": "Stream samples; the device runs no DSP.",
+      "hex": "b10b01100000000000000100b3ee"
+    },
+    {
+      "id": "mode-edge",
+      "label": "Edge: compute on the device",
+      "description": "The device runs the DSP and sends only results; no samples.",
+      "hex": "b10b0110000000000000010192fe"
+    },
+    {
+      "id": "mode-gated",
+      "label": "Gated: results, raw only when needed",
+      "description": "Results always; samples only while no R-peak has been found for 2 s (to inspect a bad signal).",
+      "hex": "b10b01100000000000000102f1ce"
+    },
+    {
+      "id": "mode-both",
+      "label": "Both: samples and device results",
+      "description": "For comparing device and browser on the same data.",
+      "hex": "b10b01100000000000000103d0de"
+    }
+  ]
 }

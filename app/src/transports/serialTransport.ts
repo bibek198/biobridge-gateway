@@ -25,6 +25,17 @@ export class SerialTransport extends BaseTransport {
     void this.readLoop();
   }
 
+  async write(bytes: Uint8Array): Promise<void> {
+    const writable = this.port?.writable;
+    if (!writable) throw new Error("Serial port is not open.");
+    const writer = writable.getWriter();
+    try {
+      await writer.write(bytes);
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
   deviceLabel(): string | null {
     const info = this.port?.getInfo?.();
     if (!info?.usbVendorId) return null;

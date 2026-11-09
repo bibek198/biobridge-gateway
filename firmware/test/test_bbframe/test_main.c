@@ -49,6 +49,28 @@ static void test_writer_flags_overflow(void) {
   TEST_ASSERT_EQUAL_size_t(3, w.len);
 }
 
+static void test_decoder_reads_every_golden_frame_with_noise_between(void) {
+  bb_decoder_t d;
+  bb_decoder_init(&d);
+  const uint8_t noise[] = {0x00, 0xb1, 0x42, 0xb1, 0x0b, 0xff};  // includes a false magic
+  size_t found = 0;
+  for (size_t i = 0; i < BB_TEST_VECTOR_COUNT; i++) {
+    const bb_test_vector_t *v = &BB_TEST_VECTORS[i];
+    bb_frame_t f;
+    for (size_t k = 0; k < sizeof noise; k++) TEST_ASSERT_FALSE(bb_decoder_push(&d, noise[k], &f));
+    bool got = false;
+    for (size_t k = 0; k < v->frame_len; k++) got = bb_decoder_push(&d, v->frame[k], &f);
+    TEST_ASSERT_TRUE_MESSAGE(got, v->name);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(v->type, f.type, v->name);
+    TEST_ASSERT_EQUAL_UINT16(v->seq, f.seq);
+    TEST_ASSERT_EQUAL_UINT32(v->device_ts_us, f.device_ts_us);
+    TEST_ASSERT_EQUAL_size_t(v->payload_len, f.payload_len);
+    if (v->payload_len) TEST_ASSERT_EQUAL_HEX8_ARRAY(v->payload, f.payload, v->payload_len);
+    found++;
+  }
+  TEST_ASSERT_EQUAL_size_t(BB_TEST_VECTOR_COUNT, found);
+}
+
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_crc_check_value);
@@ -56,5 +78,6 @@ int main(void) {
   RUN_TEST(test_hello_payload_matches_vector);
   RUN_TEST(test_encode_refuses_small_buffer);
   RUN_TEST(test_writer_flags_overflow);
+  RUN_TEST(test_decoder_reads_every_golden_frame_with_noise_between);
   return UNITY_END();
 }

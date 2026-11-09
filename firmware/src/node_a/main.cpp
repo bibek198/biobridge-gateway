@@ -5,6 +5,10 @@
 // SAMPLES frame. The frame carries the first sample's timestamp; the rest are period-spaced, which
 // holds because the timer is hardware-paced. A missed tick closes the batch early so timestamps never lie.
 //
+// Compute placement (common/placement.h): in EDGE/GATED/BOTH modes the sample task also runs the bbdsp
+// ECG detector (R-peaks, heart rate) and sends DERIVED frames. GATED sends samples only while no R-peak
+// has been found for 2 s. The host switches modes with CONFIG frames on the same serial port.
+//
 // SENSOR_SIM=1 builds synthesise the ECG on the board (no AD8232 needed) to test transport and app.
 
 #include <Arduino.h>
@@ -12,7 +16,9 @@
 #include <math.h>
 
 #include "bbframe.h"
+#include "bbdsp.h"
 #include "common/frame_out.h"
+#include "common/placement.h"
 #include "common/sync_input.h"
 
 #ifndef ECG_ADC_GPIO
@@ -79,9 +85,20 @@ static void sample_task(void *) {
   uint8_t count = 0;
   uint32_t batch_ts = 0;
   int16_t samples[BATCH];
+  static bbdsp_ecg_t dsp;  // ~2 KB: keep it off the task stack
+  bbdsp_ecg_init(&dsp, (float)SAMPLE_RATE_HZ);
+  bbdsp_event_t events[BBDSP_MAX_EVENTS_PER_PUSH];
+  uint32_t last_r_us = 0;
+  bool have_r = false;
 
   auto flush = [&]() {
     if (count == 0) return;
+    // GATED: samples only while there has been no R-peak for 2 s (bad contact, noise: worth inspecting).
+    bool raw_wanted = !have_r || (uint32_t)(batch_ts - last_r_us) > 2000000u;
+    if (!placement_sends_samples(raw_wanted)) {
+      count = 0;
+      return;
+    }
     bb_w_init(&w, payload, sizeof payload);
     bb_w_u8(&w, count);
     bb_w_u16(&w, (uint16_t)PERIOD_US);
@@ -95,7 +112,21 @@ static void sample_task(void *) {
     uint32_t ts = s_tick_ts_us;
     if (ticks > 1) flush();  // we fell behind: start a fresh batch at the current tick
     if (count == 0) batch_ts = ts;
-    samples[count++] = read_ecg_mv(ts);
+    int16_t mv = read_ecg_mv(ts);
+    samples[count++] = mv;
+    if (placement_runs_dsp()) {
+      int64_t t0 = esp_timer_get_time();
+      // Same electrode-mV conversion as the host descriptor: (pin mV - 1650) / 100.
+      int n = bbdsp_ecg_push(&dsp, ((float)mv - 1650.f) / 100.f, ts, events);
+      placement_add_dsp_us((uint32_t)(esp_timer_get_time() - t0));
+      for (int k = 0; k < n; k++) {
+        if (events[k].kind == BBDSP_R_PEAK) {
+          last_r_us = events[k].t_us;
+          have_r = true;
+        }
+        placement_send_event(events[k]);
+      }
+    }
     if (count == BATCH) flush();
   }
 }
@@ -112,6 +143,7 @@ void setup() {
 #endif
 
   frame_out_begin(serial_sink);
+  placement_begin(BB_MODE_RAW);
   sync_input_begin(SYNC_GPIO);
   frame_out_hello(BB_NODE_A_ECG, SAMPLE_RATE_HZ);
 
@@ -152,6 +184,19 @@ void loop() {
     next_probe_ms = now_ms + 100 + esp_random() % 200;
   }
 #endif
+
+  // Host commands (CONFIG) arrive on the same serial port.
+  static bb_decoder_t rx;
+  static bool rx_ready = false;
+  if (!rx_ready) {
+    bb_decoder_init(&rx);
+    rx_ready = true;
+  }
+  bb_frame_t f;
+  while (Serial.available() > 0) {
+    if (bb_decoder_push(&rx, (uint8_t)Serial.read(), &f)) placement_on_frame(f);
+  }
+  placement_tick(now_ms);
 
   sync_input_drain();
   delay(1);

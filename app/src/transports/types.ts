@@ -13,6 +13,8 @@ export interface Transport {
   open(): Promise<void>;
   close(): Promise<void>;
   onChunk(listener: ChunkListener): () => void;
+  /** Sends bytes to the device (commands). Rejects if this transport or device cannot receive. */
+  write(bytes: Uint8Array): Promise<void>;
   /** Fires when the transport ends on its own (unplugged, BLE link lost, replay finished). */
   onClosed(listener: ClosedListener): () => void;
   /** Human-readable name of the device actually opened (e.g. BLE advertised name), once known. */
@@ -32,6 +34,10 @@ export abstract class BaseTransport implements Transport {
 
   deviceLabel(): string | null {
     return null;
+  }
+
+  async write(_bytes: Uint8Array): Promise<void> {
+    throw new Error(`${this.kind} transport cannot send to the device.`);
   }
 
   onChunk(listener: ChunkListener): () => void {

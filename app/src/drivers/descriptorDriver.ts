@@ -52,6 +52,13 @@ export class DescriptorDriver extends BaseDriver {
     return this.clock.describe?.() ?? null;
   }
 
+  /** Sends one of the descriptor's commands (e.g. "mode-edge") to the device. */
+  async sendCommand(id: string): Promise<void> {
+    const cmd = this.descriptor.commands?.find((c) => c.id === id);
+    if (!cmd) throw new Error(`${this.descriptor.id} has no command "${id}".`);
+    await this.transport.write(Uint8Array.from(cmd.hex.match(/../g)!.map((b) => parseInt(b, 16))));
+  }
+
   /** Raw bytes exactly as received, before decoding. Recordings are made from this. */
   onRawChunk(listener: ChunkListener): () => void {
     this.rawListeners.add(listener);

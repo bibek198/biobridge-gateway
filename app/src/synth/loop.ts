@@ -1,4 +1,3 @@
-import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { BenchDevice } from "../bench/devices";
 import { withPlatformChannelSemantics } from "../bench/vocabulary";
 import { compileDescriptor } from "../descriptors/compile";
@@ -7,7 +6,7 @@ import { validateDescriptor } from "../descriptors/validate";
 import type { RecordedChunk, RecordingMeta } from "../session/recording";
 import type { CheckResult, Oracle } from "../verify/verifier";
 import { verifyRecording } from "../verify/verifyRecording";
-import { costUsd, type LlmProvider, type Usage } from "./providers";
+import { costUsd, type LlmProvider, type Turn, type Usage } from "./providers";
 import { SYSTEM_PROMPT, taskPrompt } from "./prompt";
 import { scoreDescriptor, type SynthScore } from "./score";
 
@@ -92,7 +91,7 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
   const oracles = opts.oracles ?? ALL_ORACLES;
   const deviceChunks = capture.chunks.filter((c) => c.c === "dev");
   const deviceLabel = capture.meta.connections.find((c) => c.key === "dev")!.label;
-  const messages: BetaMessageParam[] = [{ role: "user", content: taskPrompt(device, deviceChunks) }];
+  const turns: Turn[] = [{ role: "user", text: taskPrompt(device, deviceChunks) }];
   const attempts: Attempt[] = [];
   const usage: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
   let final: Descriptor | null = null;
@@ -103,14 +102,14 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
   for (let iteration = 1; iteration <= maxIterations && !accepted; iteration++) {
     let reply;
     try {
-      reply = await provider.complete(SYSTEM_PROMPT, messages);
+      reply = await provider.complete(SYSTEM_PROMPT, turns);
     } catch (e) {
       error = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
       break;
     }
     for (const k of Object.keys(usage) as (keyof Usage)[]) usage[k] += reply.usage[k];
     // Append-only conversation: the assistant turn goes back exactly as received.
-    messages.push({ role: "assistant", content: reply.content });
+    turns.push({ role: "assistant", text: reply.text, native: reply.native });
     const attempt: Attempt = { iteration, replyText: reply.text, stopReason: reply.stopReason, outcome: "no-json", usage: reply.usage };
     attempts.push(attempt);
 
@@ -158,7 +157,7 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
       }
     }
     attempt.feedback = feedback;
-    if (iteration < maxIterations) messages.push({ role: "user", content: feedback });
+    if (iteration < maxIterations) turns.push({ role: "user", text: feedback });
   }
 
   return {

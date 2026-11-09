@@ -31,6 +31,8 @@ export type BleTransportSpec = {
   /** 128-bit UUID string or a Web Bluetooth alias such as "heart_rate". */
   service: string;
   characteristic: string;
+  /** Characteristic the host writes commands to (see Descriptor.commands), if the device accepts any. */
+  commandCharacteristic?: string;
   namePrefix?: string;
 };
 
@@ -140,6 +142,9 @@ export type ChannelSpec = {
 
 export type PlausibilitySpec = { min?: number; max?: number; maxRatePerSec?: number };
 
+/** A fixed byte string the host can send to the device, e.g. to switch its compute mode. */
+export type CommandSpec = { id: string; label: string; description?: string; /** bytes as hex, e.g. "b10b01..." */ hex: string };
+
 export type Descriptor = {
   schema: typeof DESCRIPTOR_SCHEMA;
   id: string;
@@ -152,6 +157,8 @@ export type Descriptor = {
   /** Text devices (delimited framing). */
   text?: TextFormat;
   channels: ChannelSpec[];
-  /** Physical-plausibility bounds per channel. Not enforced yet; consumed by the Paper 2 verifier. */
+  /** Physical-plausibility bounds per channel, used by the verifier. */
   plausibility?: Record<string, PlausibilitySpec>;
+  /** Commands the host may send (serial: written to the port; BLE: to transport.commandCharacteristic). */
+  commands?: CommandSpec[];
 };

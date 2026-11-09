@@ -8,7 +8,18 @@ const DERIVED_LABELS: Record<string, string> = {
   heartRate_computed: "Heart Rate (computed from ECG)",
   spo2_filtered: "SpO2 (filtered)",
   pulseRate_ppg: "Pulse Rate (computed from PPG)",
+  heartRate_wasm: "Heart Rate (firmware DSP in browser)",
+  pulseRate_wasm: "Pulse Rate (firmware DSP in browser)",
+  spo2_wasm: "SpO2 (firmware DSP in browser)",
+  sqi_wasm: "Signal quality (firmware DSP in browser)",
 };
+
+/** Device-computed values arrive as float32; show them at a precision a person can read. */
+function displayValue(v: number): string {
+  if (Number.isInteger(v)) return String(v);
+  const a = Math.abs(v);
+  return String(Number(v.toFixed(a >= 100 ? 1 : a >= 1 ? 2 : 3)));
+}
 
 function DeviceSection({ conn }: { conn: ConnectionView }) {
   const { session } = useAppStore();
@@ -40,7 +51,7 @@ function DeviceSection({ conn }: { conn: ConnectionView }) {
               <div key={ch} className={`tile tile-${severity(ch)}`}>
                 <div className="tile-label">{declared.get(ch)?.label ?? DERIVED_LABELS[ch] ?? ch}</div>
                 <div className="tile-value">
-                  {reading ? reading.value : "—"}
+                  {reading ? displayValue(reading.value) : "—"}
                   <span className="tile-unit">{reading?.unit ?? ""}</span>
                 </div>
               </div>

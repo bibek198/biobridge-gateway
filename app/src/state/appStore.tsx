@@ -18,7 +18,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void session.refreshRecordings();
-    if (session.listConnections().length === 0) void session.connect("sim-monitor");
+    session.connectDefaultOnce();
     // Connections persist across StrictMode's dev-only double effect; they are torn down on page unload.
   }, [session]);
 

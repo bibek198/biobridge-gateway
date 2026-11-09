@@ -2,7 +2,7 @@
 // The app never decodes these by hand: the descriptors in src/descriptors/*.json do.
 // These builders exist so the simulator and the test-vector generator emit exactly what firmware emits.
 
-import { encodeFrame, FrameType, PayloadWriter } from "./frame.ts";
+import { crc16CcittFalse, encodeFrame, FrameType, PayloadWriter } from "./frame.ts";
 
 export const NodeKind = {
   NODE_A_ECG: 1,
@@ -53,6 +53,43 @@ export function leadsOffPayload(state: number): Uint8Array {
 /** SYNC_EVENT: edge u8 (1 rising, 0 falling) | gpio u8. The frame's device_ts_us is the edge time. */
 export function syncEventPayload(edge: number, gpio: number): Uint8Array {
   return Uint8Array.of(edge & 1, gpio & 0xff);
+}
+
+/** Where a node computes: see protocol/FRAME.md "Compute placement". */
+export const ComputeMode = {
+  RAW: 0, // stream samples; compute in the browser
+  EDGE: 1, // compute on the device; send only DERIVED results
+  GATED: 2, // DERIVED always; samples only while signal quality is low
+  BOTH: 3, // samples and DERIVED (for comparing device and browser on the same data)
+} as const;
+
+/** DERIVED: kind u8 (bbdsp event kind) | value f32le. The frame's device_ts_us is the event time. */
+export function derivedPayload(kind: number, value: number): Uint8Array {
+  return new PayloadWriter().u8(kind).f32(value).build();
+}
+
+/** STATS: mode u8 | dsp_us u32le (CPU time in DSP) | tx_bytes u32le | period_ms u16le, all over the period. */
+export function statsPayload(s: { mode: number; dspUs: number; txBytes: number; periodMs: number }): Uint8Array {
+  return new PayloadWriter().u8(s.mode).u32(s.dspUs).u32(s.txBytes).u16(s.periodMs).build();
+}
+
+/** CONFIG (host → device): mode u8. */
+export function configFrame(mode: number): Uint8Array {
+  return encodeFrame({ type: FrameType.CONFIG, seq: 0, deviceTsUs: 0, payload: Uint8Array.of(mode) });
+}
+
+/** The mode in a CONFIG frame (as the firmware's bb_decoder would accept it), or null. */
+export function parseConfigFrame(bytes: Uint8Array): number | null {
+  for (let i = 0; i + 13 <= bytes.length; i++) {
+    if (bytes[i] !== 0xb1 || bytes[i + 1] !== 0x0b || bytes[i + 2] !== 1) continue;
+    const len = bytes[i + 10];
+    const end = i + 11 + len;
+    if (end + 2 > bytes.length) return null;
+    const crc = bytes[end] | (bytes[end + 1] << 8);
+    if (crc16CcittFalse(bytes, i + 2, end) !== crc) continue;
+    return bytes[i + 3] === FrameType.CONFIG && len >= 1 && bytes[i + 11] <= ComputeMode.BOTH ? bytes[i + 11] : null;
+  }
+  return null;
 }
 
 export function frame(type: number, seq: number, deviceTsUs: number, payload: Uint8Array): Uint8Array {

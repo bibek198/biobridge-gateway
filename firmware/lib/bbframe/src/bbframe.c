@@ -85,3 +85,49 @@ size_t bb_hello_payload(uint8_t *out, size_t cap, uint8_t node_kind, uint16_t sa
   bb_w_bytes(&w, mac, 6);
   return w.overflow ? 0 : w.len;
 }
+
+void bb_decoder_init(bb_decoder_t *d) {
+  d->len = 0;
+  d->consumed = 0;
+}
+
+static void drop(bb_decoder_t *d, size_t n) {
+  memmove(d->buf, d->buf + n, d->len - n);
+  d->len -= n;
+}
+
+bool bb_decoder_push(bb_decoder_t *d, uint8_t byte, bb_frame_t *out) {
+  if (d->consumed) {
+    drop(d, d->consumed);
+    d->consumed = 0;
+  }
+  if (d->len == sizeof d->buf) drop(d, 1);  // cannot happen with valid lengths; keeps us safe anyway
+  d->buf[d->len++] = byte;
+
+  for (;;) {
+    if (d->len >= 1 && d->buf[0] != BB_MAGIC0) {
+      drop(d, 1);
+      continue;
+    }
+    // Magic plus the version byte: rejects most false magics at once instead of waiting out their bogus length.
+    if ((d->len >= 2 && d->buf[1] != BB_MAGIC1) || (d->len >= 3 && d->buf[2] != BB_VERSION)) {
+      drop(d, 1);
+      continue;
+    }
+    if (d->len < BB_HEADER_LEN) return false;
+    size_t total = BB_OVERHEAD + d->buf[10];
+    if (d->len < total) return false;
+    uint16_t want = (uint16_t)(d->buf[total - 2] | (d->buf[total - 1] << 8));
+    if (bb_crc16(d->buf + 2, total - 4) != want) {
+      drop(d, 1);  // false magic or corruption: hunt again
+      continue;
+    }
+    out->type = d->buf[3];
+    out->seq = (uint16_t)(d->buf[4] | (d->buf[5] << 8));
+    out->device_ts_us = (uint32_t)d->buf[6] | ((uint32_t)d->buf[7] << 8) | ((uint32_t)d->buf[8] << 16) | ((uint32_t)d->buf[9] << 24);
+    out->payload = d->buf + BB_HEADER_LEN;
+    out->payload_len = d->buf[10];
+    d->consumed = total;
+    return true;
+  }
+}

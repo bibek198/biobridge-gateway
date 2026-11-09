@@ -16,6 +16,8 @@ import {
   nodeASamplesPayload,
   nodeBSamplesPayload,
   syncEventPayload,
+  derivedPayload,
+  statsPayload,
 } from "../src/protocol/nodes.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -124,6 +126,15 @@ add(
 );
 
 add("node_b_time_probe", "biobridge-node-b", FrameType.TIME_PROBE, 9, 0x0000_3000, new Uint8Array(0), { samples: [] });
+
+add("node_b_derived_spo2", "biobridge-node-b", FrameType.DERIVED, 10, 0x0000_4000, derivedPayload(5, 96.5), {
+  samples: [{ channel: "spo2_edge", value: 96.5, deviceTimestampUs: 0x1_0000_4000 }],
+});
+add("node_a_stats", "biobridge-node-a", FrameType.STATS, 4, 2_100_000, statsPayload({ mode: 1, dspUs: 12_345, txBytes: 678, periodMs: 5000 }), {
+  samples: [],
+  info: { mode: 1, dspUs: 12345, txBytes: 678, statsPeriodMs: 5000 },
+});
+add("config_mode_edge", "biobridge-node-a", FrameType.CONFIG, 0, 0, Uint8Array.of(1), { samples: [] });
 
 const crcCheck = { ascii: "123456789", crc: crc16CcittFalse(new TextEncoder().encode("123456789")) };
 if (crcCheck.crc !== 0x29b1) throw new Error(`CRC-16/CCITT-FALSE check failed: ${crcCheck.crc.toString(16)}`);

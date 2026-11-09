@@ -26,6 +26,17 @@ enum {
   BB_SYNC_EVENT = 0x03,
   BB_LEADS_OFF = 0x04,
   BB_TIME_PROBE = 0x05,
+  BB_DERIVED = 0x06,
+  BB_STATS = 0x07,
+  BB_CONFIG = 0x10,  // host -> device
+};
+
+// Compute placement modes (CONFIG payload byte 0, STATS payload byte 0).
+enum {
+  BB_MODE_RAW = 0,    // stream samples, no on-device DSP
+  BB_MODE_EDGE = 1,   // on-device DSP, DERIVED results only
+  BB_MODE_GATED = 2,  // DERIVED always, samples only while signal quality is low
+  BB_MODE_BOTH = 3,   // samples and DERIVED
 };
 
 enum {
@@ -62,6 +73,25 @@ void bb_w_bytes(bb_writer_t *w, const uint8_t *src, size_t n);
 /** HELLO payload: protocol u8 | node_kind u8 | sample_rate_hz u16 | fw_major u8 | fw_minor u8 | mac[6]. */
 size_t bb_hello_payload(uint8_t *out, size_t cap, uint8_t node_kind, uint16_t sample_rate_hz, uint8_t fw_major,
                         uint8_t fw_minor, const uint8_t mac[6]);
+
+/** Incremental frame decoder (for host -> device commands). Resynchronises on bad magic or CRC. */
+typedef struct {
+  uint8_t buf[BB_MAX_FRAME];
+  size_t len;
+  size_t consumed;  // bytes of the frame returned by the previous push, dropped on the next push
+} bb_decoder_t;
+
+typedef struct {
+  uint8_t type;
+  uint16_t seq;
+  uint32_t device_ts_us;
+  const uint8_t *payload;  // points into the decoder; valid until the next bb_decoder_push
+  uint8_t payload_len;
+} bb_frame_t;
+
+void bb_decoder_init(bb_decoder_t *d);
+/** Feed one byte. Returns true when a complete, CRC-valid frame is in *out. */
+bool bb_decoder_push(bb_decoder_t *d, uint8_t byte, bb_frame_t *out);
 
 #ifdef __cplusplus
 }

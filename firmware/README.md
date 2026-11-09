@@ -107,6 +107,20 @@ pio device monitor -e node_b
 - **Node A** ([`src/node_a/main.cpp`](src/node_a/main.cpp)): a hardware timer fires every 4 ms. The ISR timestamps the tick with `esp_timer` and wakes a high-priority task on core 1. That task reads the calibrated ADC and batches 10 samples into one frame. If it ever falls behind by a tick, it closes the batch early, so per-sample timestamps stay correct.
 - **Node B** ([`src/node_b/`](src/node_b/)): a register-level MAX30102 driver ([`max30102.cpp`](src/node_b/max30102.cpp)) configured for SpO2 mode, 100 sps, 18-bit, with an interrupt on every sample. The INT edge timestamps the newest sample; the FIFO is drained and samples are packed to fit one BLE notification at the negotiated MTU. The sensor runs on its own oscillator, so its sample clock drifts against the ESP32 clock. Measuring that drift is part of the Paper 1 work.
 
+## Compute placement
+
+Both nodes can run the ECG/PPG processing themselves ([`lib/bbdsp`](lib/bbdsp/)). That is the same C library the web app runs as WebAssembly, so device and browser results are directly comparable. Nodes start in **Raw** mode (samples only, as before). Switch modes from the app's **Compute Placement** tab:
+
+- **Edge:** results only. Heart rate on Node A; pulse rate, SpO2 and signal quality on Node B.
+- **Gated:** results, plus samples while the node's quality check is unhappy.
+- **Both:** samples and results.
+
+Every 5 s each node reports its mode, the CPU time it spent on DSP, and how many bytes it sent. The app turns these into the traffic, CPU and modelled-power figures. To measure real power instead, put the INA219 in Node B's supply.
+
+`pio test -e native` also runs the DSP library's tests (filters, heart rate, pulse rate, SpO2, signal quality) on your computer.
+
+After changing `lib/bbdsp`, rebuild the browser copy from `app/` with `npm run build:wasm`. That needs Zig: `brew install zig` or `pip install ziglang`.
+
 ## Versions
 
 Pinned to `espressif32@6.9.0` (Arduino-ESP32 2.0.17) and `NimBLE-Arduino@1.4.3`. The hardware-timer and NimBLE callback APIs differ in Arduino-ESP32 3.x and NimBLE 2.x, so upgrading needs code changes.

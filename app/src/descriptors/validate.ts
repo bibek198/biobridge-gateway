@@ -216,6 +216,18 @@ export function validateDescriptor(input: unknown): ValidationResult {
     });
   }
 
+  if (d.commands !== undefined) {
+    if (!Array.isArray(d.commands)) err("$.commands", "must be an array");
+    else {
+      d.commands.forEach((c, i) => {
+        if (!isObj(c)) return err(`$.commands[${i}]`, "must be an object");
+        str(`$.commands[${i}].id`, c.id);
+        str(`$.commands[${i}].label`, c.label);
+        if (typeof c.hex !== "string" || !/^([0-9a-fA-F]{2})+$/.test(c.hex)) err(`$.commands[${i}].hex`, "must be a non-empty hex byte string");
+      });
+    }
+  }
+
   if (d.plausibility !== undefined) {
     if (!isObj(d.plausibility)) err("$.plausibility", "must be an object keyed by channel");
     else {

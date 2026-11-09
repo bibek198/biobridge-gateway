@@ -27,6 +27,9 @@ bool frame_out_probe();
 /** Sends a HELLO for this node, stamped now. */
 bool frame_out_hello(uint8_t node_kind, uint16_t sample_rate_hz);
 
+/** Bytes handed to the sink since the last call (for STATS: what the link actually carried). */
+uint32_t frame_out_take_tx_bytes();
+
 /** Frames attempted and frames the sink refused, for diagnostics. */
 uint32_t frame_out_sent();
 uint32_t frame_out_dropped();

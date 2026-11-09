@@ -16,6 +16,10 @@ export const FrameType = {
   SYNC_EVENT: 0x03,
   LEADS_OFF: 0x04,
   TIME_PROBE: 0x05,
+  DERIVED: 0x06,
+  STATS: 0x07,
+  /** Host → device. */
+  CONFIG: 0x10,
 } as const;
 
 export function crc16CcittFalse(bytes: Uint8Array, start = 0, end = bytes.length): number {
@@ -76,6 +80,12 @@ export class PayloadWriter {
 
   u32(v: number): this {
     return this.u16(v & 0xffff).u16((v >>> 16) & 0xffff);
+  }
+
+  f32(v: number): this {
+    const b = new Uint8Array(4);
+    new DataView(b.buffer).setFloat32(0, v, true);
+    return this.raw(b);
   }
 
   raw(b: ArrayLike<number>): this {

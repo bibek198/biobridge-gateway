@@ -7,6 +7,7 @@ export class BleTransport extends BaseTransport {
   private readonly spec: BleTransportSpec;
   private device: BluetoothDevice | null = null;
   private characteristic: BluetoothRemoteGATTCharacteristic | null = null;
+  private commandCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
   private closing = false;
 
   private onValue = (event: Event) => {
@@ -42,8 +43,17 @@ export class BleTransport extends BaseTransport {
     if (!server) throw new Error("Unable to connect to GATT server.");
     const service = await server.getPrimaryService(this.spec.service);
     this.characteristic = await service.getCharacteristic(this.spec.characteristic);
+    if (this.spec.commandCharacteristic) {
+      // Optional: older firmware without the command characteristic still streams fine.
+      this.commandCharacteristic = await service.getCharacteristic(this.spec.commandCharacteristic).catch(() => null);
+    }
     this.characteristic.addEventListener("characteristicvaluechanged", this.onValue);
     await this.characteristic.startNotifications();
+  }
+
+  async write(bytes: Uint8Array): Promise<void> {
+    if (!this.commandCharacteristic) throw new Error("This device has no command characteristic (update its firmware?).");
+    await this.commandCharacteristic.writeValueWithResponse(bytes.slice()); // a copy owns a plain ArrayBuffer
   }
 
   deviceLabel(): string | null {
@@ -61,6 +71,7 @@ export class BleTransport extends BaseTransport {
       this.device?.gatt?.disconnect();
     } finally {
       this.characteristic = null;
+      this.commandCharacteristic = null;
       this.device = null;
     }
   }

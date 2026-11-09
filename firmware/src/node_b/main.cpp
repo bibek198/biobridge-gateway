@@ -5,6 +5,11 @@
 // timestamp to the newest sample (older ones are period-spaced back from it). Samples are batched so
 // that one frame fits one notification at the negotiated ATT MTU (up to 5 samples = 50 ms).
 //
+// Compute placement (common/placement.h): in EDGE/GATED/BOTH modes the PPG task also runs the bbdsp PPG
+// pipeline (pulse rate, SpO2, signal quality) and sends DERIVED frames. GATED sends samples only while
+// the signal quality index is below 0.8 (motion, poor contact). The host writes CONFIG frames to a
+// second characteristic (DATA_CHAR + 1).
+//
 // The USB serial port carries human-readable logs only. SENSOR_SIM=1 synthesises PPG on the board.
 
 #include <Arduino.h>
@@ -14,7 +19,9 @@
 #include <math.h>
 
 #include "bbframe.h"
+#include "bbdsp.h"
 #include "common/frame_out.h"
+#include "common/placement.h"
 #include "common/sync_input.h"
 #include "max30102.h"
 
@@ -37,6 +44,7 @@
 // Must match app/src/descriptors/library/biobridge-node-b.json.
 static const char *SERVICE_UUID = "6b1e0001-b19b-4b1d-9e0a-0b1b2d3c4e5f";
 static const char *DATA_CHAR_UUID = "6b1e0002-b19b-4b1d-9e0a-0b1b2d3c4e5f";
+static const char *COMMAND_CHAR_UUID = "6b1e0003-b19b-4b1d-9e0a-0b1b2d3c4e5f";
 static const char *DEVICE_NAME = "BioBridge-B";
 
 static const uint32_t SAMPLE_RATE_HZ = 100;
@@ -92,6 +100,19 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   }
 };
 
+class CommandCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic *c) override {
+    // One command frame per write; decode it like any byte stream.
+    static bb_decoder_t rx;
+    bb_decoder_init(&rx);
+    NimBLEAttValue v = c->getValue();
+    bb_frame_t f;
+    for (size_t i = 0; i < v.length(); i++) {
+      if (bb_decoder_push(&rx, v.data()[i], &f)) placement_on_frame(f);
+    }
+  }
+};
+
 class DataCallbacks : public NimBLECharacteristicCallbacks {
   void onSubscribe(NimBLECharacteristic *, ble_gap_conn_desc *, uint16_t sub_value) override {
     s_subscribed = (sub_value & 0x0001) != 0;
@@ -108,6 +129,8 @@ static void ble_begin() {
   NimBLEService *service = server->createService(SERVICE_UUID);
   s_data_char = service->createCharacteristic(DATA_CHAR_UUID, NIMBLE_PROPERTY::NOTIFY);
   s_data_char->setCallbacks(new DataCallbacks());
+  NimBLECharacteristic *cmd = service->createCharacteristic(COMMAND_CHAR_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  cmd->setCallbacks(new CommandCallbacks());
   service->start();
 
   NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
@@ -166,9 +189,18 @@ static void ppg_task(void *) {
   uint8_t count = 0;
   uint32_t batch_ts = 0;
   uint8_t payload[3 + SAMPLE_BYTES * MAX_BATCH];
+  static bbdsp_ppg_t dsp;  // ~1.5 KB: keep it off the task stack
+  bbdsp_ppg_init(&dsp, (float)SAMPLE_RATE_HZ);
+  bbdsp_event_t events[BBDSP_MAX_EVENTS_PER_PUSH];
+  float last_sqi = -1.f;
 
   auto flush = [&]() {
     if (count == 0) return;
+    // GATED: samples only while signal quality is low (or not yet known).
+    if (!placement_sends_samples(last_sqi < 0.8f)) {
+      count = 0;
+      return;
+    }
     bb_writer_t w;
     bb_w_init(&w, payload, sizeof payload);
     bb_w_u8(&w, count);
@@ -197,6 +229,15 @@ static void ppg_task(void *) {
       if (count > 0 && (int32_t)(ts - (batch_ts + count * PERIOD_US)) > (int32_t)(PERIOD_US / 2)) flush();
       if (count == 0) batch_ts = ts;
       batch[count++] = fifo[i];
+      if (placement_runs_dsp() && s_subscribed) {
+        int64_t t0 = esp_timer_get_time();
+        int ne = bbdsp_ppg_push(&dsp, (float)fifo[i].red, (float)fifo[i].ir, ts, events);
+        placement_add_dsp_us((uint32_t)(esp_timer_get_time() - t0));
+        for (int k = 0; k < ne; k++) {
+          if (events[k].kind == BBDSP_SQI) last_sqi = events[k].value;
+          placement_send_event(events[k]);
+        }
+      }
       if (per_frame == 0) count = 0;  // MTU too small to send anything yet
       else if (count >= per_frame) flush();
     }
@@ -208,6 +249,7 @@ void setup() {
   Serial.printf("BioBridge Node B%s\n", SENSOR_SIM ? " (SENSOR_SIM)" : "");
 
   frame_out_begin(ble_sink);
+  placement_begin(BB_MODE_RAW);
   ble_begin();
   sync_input_begin(SYNC_GPIO);
 
@@ -238,6 +280,7 @@ void loop() {
   }
 #endif
 
+  if (s_subscribed) placement_tick(now_ms);
   sync_input_drain();
   delay(1);
 }

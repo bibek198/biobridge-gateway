@@ -2,6 +2,10 @@ import { ComputePipeline } from "../compute/pipeline";
 import { MovingAverageModule } from "../compute/modules/movingAverage";
 import { PeakHeartRateModule } from "../compute/modules/peakHeartRate";
 import { PpgPulseRateModule } from "../compute/modules/ppgPulseRate";
+import { WasmEcgModule, WasmPpgModule } from "../compute/modules/edgeDsp";
+import bbdspUrl from "../dsp/bbdsp.wasm?url";
+import { EdgeDsp } from "../dsp/edgeDsp";
+import { estimatePower, type PowerEstimate } from "../placement/energy";
 import { crossSensorChecks, median, rateKind, StreamVerifier, type CheckResult, type RateEstimate, type VerificationReport } from "../verify/verifier";
 import { DEFAULT_THRESHOLDS, ThresholdAlertModule, type ChannelThresholds } from "../compute/modules/thresholdAlert";
 import type { AlertEvent, ComputeModule } from "../compute/types";
@@ -64,14 +68,39 @@ type Connection = {
 
 const RATE_WINDOW_MS = 15_000;
 
-function createModules(thresholds: Record<string, ChannelThresholds>): ComputeModule[] {
+function createModules(thresholds: Record<string, ChannelThresholds>, getDsp: () => EdgeDsp | null): ComputeModule[] {
   return [
     new MovingAverageModule("spo2", 8),
     new PeakHeartRateModule(),
     new PpgPulseRateModule(),
+    new WasmEcgModule(getDsp),
+    new WasmPpgModule(getDsp),
     new ThresholdAlertModule(thresholds),
   ];
 }
+
+/** What the device computed (*_edge) next to what the browser computed from samples (*_wasm). */
+const PLACEMENT_PAIRS: { label: string; device: string; browser: string; unit: string }[] = [
+  { label: "Heart rate (ECG)", device: "heartRate_edge", browser: "heartRate_wasm", unit: "bpm" },
+  { label: "Pulse rate (PPG)", device: "pulseRate_edge", browser: "pulseRate_wasm", unit: "bpm" },
+  { label: "SpO2", device: "spo2_edge", browser: "spo2_wasm", unit: "%" },
+  { label: "Signal quality", device: "sqi_edge", browser: "sqi_wasm", unit: "" },
+];
+
+export type PlacementView = {
+  id: string;
+  label: string;
+  transport: "serial" | "ble";
+  commands: { id: string; label: string; description?: string }[];
+  /** From the device's last STATS frame. */
+  mode: number | null;
+  linkBytesPerS: number | null;
+  deviceDspUsPerS: number | null;
+  /** Wall time the browser spent in Wasm DSP for this connection, ms per second. */
+  browserDspMsPerS: number;
+  power: PowerEstimate | null;
+  results: { label: string; unit: string; device: number | null; browser: number | null }[];
+};
 
 /**
  * Owns every live connection, its compute pipeline and buffers, and the recorder. Framework-free so it can
@@ -84,7 +113,10 @@ export class SessionManager {
   /** Shared by every connection's threshold module, so one edit applies everywhere. */
   readonly thresholds: Record<string, ChannelThresholds> = { ...DEFAULT_THRESHOLDS };
   /** Display-only module instances for the pipeline panel; per-connection instances do the work. */
-  readonly modulePrototypes: ComputeModule[] = createModules(this.thresholds);
+  readonly modulePrototypes: ComputeModule[] = createModules(this.thresholds, () => null);
+  /** The firmware DSP compiled to WebAssembly; shared by the browser modules and the simulated nodes. */
+  dsp: EdgeDsp | null = null;
+  private readonly dspReady: Promise<EdgeDsp | null>;
   readonly recordingsSupported = RecordingStore.isAvailable();
 
   alerts: AlertEvent[] = [];
@@ -97,6 +129,19 @@ export class SessionManager {
   private version = 0;
   private readonly store = new RecordingStore();
   private readonly pulses = new PulsePairTracker();
+  private cpuHistory = new Map<string, Array<{ t: number; ms: number }>>();
+
+  constructor() {
+    this.dspReady =
+      typeof fetch === "undefined"
+        ? Promise.resolve(null)
+        : EdgeDsp.fromUrl(bbdspUrl)
+            .then((d) => (this.dsp = d))
+            .catch((err) => {
+              console.error("Could not load the Wasm DSP:", err);
+              return null;
+            });
+  }
   /** Clock-sync method given to newly created connections (and replays). */
   clockMethod: ClockMethodId = DEFAULT_CLOCK_METHOD;
   private readonly recorder = new Recorder(this.store);
@@ -121,7 +166,9 @@ export class SessionManager {
   async connect(factoryId: string): Promise<string> {
     const factory = DEVICE_FACTORIES.find((f) => f.id === factoryId);
     if (!factory) throw new Error(`Unknown device type ${factoryId}`);
-    const transport = factory.createTransport({ physiology: this.physiology, rig: this.rig });
+    // Simulated nodes run the Wasm DSP in edge modes. Hardware must not wait: the device picker needs the click's user gesture.
+    if (factory.group === "simulated") await this.dspReady;
+    const transport = factory.createTransport({ physiology: this.physiology, rig: this.rig, dsp: this.dsp });
     const driver = new DescriptorDriver(factory.descriptor, transport, createClockMapper(this.clockMethod, factory.descriptor));
     const conn = this.addConnection(factory.id, factory.label, factory.group, driver, "live");
     await driver.connect();
@@ -134,8 +181,10 @@ export class SessionManager {
     if (!conn) return;
     for (const u of conn.unsubs) u();
     await conn.driver.disconnect();
+    conn.pipeline.reset(); // frees Wasm detectors
     this.connections.delete(id);
     this.pulses.removeSource(id);
+    this.cpuHistory.delete(id);
     this.changed();
   }
 
@@ -216,7 +265,7 @@ export class SessionManager {
     const id = `c${this.nextId++}`;
     const sameKind = [...this.connections.values()].filter((c) => c.label === label || c.label.startsWith(`${label} #`));
     const pipeline = new ComputePipeline();
-    for (const m of createModules(this.thresholds)) pipeline.register(m, this.moduleEnabled.get(m.id) ?? true);
+    for (const m of createModules(this.thresholds, () => this.dsp)) pipeline.register(m, this.moduleEnabled.get(m.id) ?? true);
 
     const conn: Connection = {
       id,
@@ -264,6 +313,69 @@ export class SessionManager {
       this.alerts = [...tagged, ...this.alerts].slice(0, MAX_ALERTS);
       this.changed();
     }
+  }
+
+  // ---- compute placement --------------------------------------------------------------------------
+
+  private defaultConnected = false;
+
+  /** The demo device shown on first load; idempotent (React may run start-up effects twice in development). */
+  connectDefaultOnce(): void {
+    if (this.defaultConnected) return;
+    this.defaultConnected = true;
+    void this.connect("sim-monitor");
+  }
+
+  async sendCommand(connectionId: string, commandId: string): Promise<void> {
+    const conn = this.connections.get(connectionId);
+    if (!conn) throw new Error("No such connection.");
+    await conn.driver.sendCommand(commandId);
+  }
+
+  /** Devices that accept commands (compute-placement nodes), with their link, compute cost and results. */
+  listPlacement(): PlacementView[] {
+    const now = hostNowMs();
+    const views: PlacementView[] = [];
+    for (const c of this.connections.values()) {
+      const commands = c.driver.descriptor.commands ?? [];
+      if (commands.length === 0) continue;
+      const info = c.driver.getInfo();
+      const periodMs = typeof info.statsPeriodMs === "number" && info.statsPeriodMs > 0 ? info.statsPeriodMs : null;
+      const linkBytesPerS = periodMs && typeof info.txBytes === "number" ? (info.txBytes / periodMs) * 1000 : null;
+      const deviceDspUsPerS = periodMs && typeof info.dspUs === "number" ? (info.dspUs / periodMs) * 1000 : null;
+      const transport = c.driver.descriptor.transport.kind;
+
+      // Browser Wasm cost: rate over the last ~5 s of this connection's Wasm module time.
+      const cpu = c.pipeline
+        .getEntries()
+        .reduce((s, e) => s + (e.module instanceof WasmEcgModule || e.module instanceof WasmPpgModule ? e.module.cpuMs() : 0), 0);
+      const hist = this.cpuHistory.get(c.id) ?? [];
+      hist.push({ t: now, ms: cpu });
+      while (hist.length > 2 && hist[1].t < now - 5000) hist.shift();
+      this.cpuHistory.set(c.id, hist);
+      const span = (now - hist[0].t) / 1000;
+      const browserDspMsPerS = span > 0.5 ? (cpu - hist[0].ms) / span : 0;
+
+      const latest = (ch: string) => c.latest.get(ch)?.value ?? null;
+      views.push({
+        id: c.id,
+        label: c.label,
+        transport,
+        commands: commands.map(({ id, label, description }) => ({ id, label, description })),
+        mode: typeof info.mode === "number" ? info.mode : null,
+        linkBytesPerS,
+        deviceDspUsPerS,
+        browserDspMsPerS,
+        power: linkBytesPerS === null || deviceDspUsPerS === null ? null : estimatePower({ transport, linkBytesPerS, dspUsPerS: deviceDspUsPerS }),
+        results: PLACEMENT_PAIRS.filter((p) => c.latest.has(p.device) || c.latest.has(p.browser)).map((p) => ({
+          label: p.label,
+          unit: p.unit,
+          device: latest(p.device),
+          browser: latest(p.browser),
+        })),
+      });
+    }
+    return views;
   }
 
   // ---- clock sync ---------------------------------------------------------------------------------

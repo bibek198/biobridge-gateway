@@ -1,20 +1,22 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BENCH_DEVICES, type BenchDevice } from "../src/bench/devices";
 import { ALL_ORACLES, extractJson, synthesize, type OracleSet, type SynthResult } from "../src/synth/loop";
 import { captureExcerpt, SYSTEM_PROMPT, taskPrompt } from "../src/synth/prompt";
-import { AnthropicProvider, PRICING, ScriptedProvider, SYNTH_MODELS, type SynthModel } from "../src/synth/providers";
+import { createProvider, PRICING, ScriptedProvider, type SynthModel } from "../src/synth/providers";
 import { benchCapture, type BenchCapture } from "./helpers/benchCapture";
 import { FAKE_TIMERS } from "./helpers/simRecording";
 
 // Paper 2 runner. Without SYNTH_LIVE it checks the loop's mechanics with a scripted model (no API calls).
 //   SYNTH_LIVE=1 npm run eval:synth                                  Opus 5.5 on every device
 //   SYNTH_LIVE=1 SYNTH_MODELS=claude-opus-5-5,claude-haiku-5-5 SYNTH_DEVICES=fingertip-oximeter,wrist-imu npm run eval:synth
+//   SYNTH_LIVE=1 SYNTH_MODELS=gemini:<model id> npm run eval:synth   (ids: npm run gemini:models)
 //   SYNTH_ORACLES=structural            only that oracle's findings are fed back (ablation); "none" = validator only
 //   SYNTH_OUT=../eval/results/synth-x   where transcripts and reports go (default eval/results/synth-<timestamp>)
 //   SYNTH_ITERATIONS=4 SYNTH_SEED=11 SYNTH_EFFORT=high
-// The API key comes from the environment, or from the repo-root .env (gitignored; see .env.example).
+// API keys come from the environment, or from the repo-root .env (gitignored; see .env.example).
 
 const env = process.env;
 const fence = (o: unknown) => "```json\n" + JSON.stringify(o, null, 2) + "\n```";
@@ -39,8 +41,8 @@ describe("synthesis loop mechanics (scripted model)", () => {
     let feedbackSeen = "";
     const provider = new ScriptedProvider([
       "Here is my first attempt.\n" + fence(wrong),
-      (msgs) => {
-        feedbackSeen = String(msgs[msgs.length - 1].content);
+      (turns) => {
+        feedbackSeen = turns[turns.length - 1].text;
         return "Fixed.\n" + fence(ox.groundTruth);
       },
     ]);
@@ -121,7 +123,7 @@ function reportLine(r: SynthResult): string {
 }
 
 describe.runIf(env.SYNTH_LIVE === "1")("live descriptor synthesis", () => {
-  const models = (env.SYNTH_MODELS?.split(",") ?? ["claude-opus-5-5"]) as SynthModel[];
+  const models = env.SYNTH_MODELS?.split(",").map((m) => m.trim()) ?? ["claude-opus-5-5"];
   const devices: BenchDevice[] = env.SYNTH_DEVICES ? env.SYNTH_DEVICES.split(",").map(device) : BENCH_DEVICES;
   const oracles = env.SYNTH_ORACLES === "none" ? parseOracles("") : parseOracles(env.SYNTH_ORACLES);
   const maxIterations = Number(env.SYNTH_ITERATIONS ?? 4);
@@ -130,12 +132,21 @@ describe.runIf(env.SYNTH_LIVE === "1")("live descriptor synthesis", () => {
   const outDir = resolve(env.SYNTH_OUT ?? `../eval/results/synth-${new Date().toISOString().replace(/[:.]/g, "-")}`);
 
   it("runs", { timeout: 4 * 3_600_000 }, async () => {
+    // Keys from the repo-root .env, without overriding anything already set in the shell.
     const dotenv = new URL("../../.env", import.meta.url);
-    if (!env.ANTHROPIC_API_KEY && existsSync(dotenv)) process.loadEnvFile(dotenv);
-    for (const m of models) expect(SYNTH_MODELS, `unknown model ${m}`).toContain(m);
-    // Upper bound: every iteration used, ~12k input and ~8k output tokens each.
-    const bound = models.reduce((s, m) => s + devices.length * maxIterations * (12_000 * PRICING[m].input + 8_000 * PRICING[m].output) / 1e6, 0);
-    console.log(`Live run: ${models.join(", ")} × ${devices.length} devices, ≤${maxIterations} iterations, effort ${effort}. Worst-case cost ≈ $${bound.toFixed(2)}.`);
+    if (existsSync(dotenv)) {
+      for (const [k, v] of Object.entries(parseEnv(readFileSync(dotenv, "utf8")))) if (!env[k] && v) env[k] = v;
+    }
+    const providers = models.map((m) => createProvider(m, effort)); // throws on an unknown model name
+    // Upper bound for priced (Claude) models: every iteration used, ~12k input and ~8k output tokens each.
+    const bound = models.reduce((s, m) => {
+      const p = PRICING[m as SynthModel];
+      return p ? s + (devices.length * maxIterations * (12_000 * p.input + 8_000 * p.output)) / 1e6 : s;
+    }, 0);
+    console.log(
+      `Live run: ${models.join(", ")} × ${devices.length} devices, ≤${maxIterations} iterations. Worst-case Claude cost ≈ $${bound.toFixed(2)}` +
+        (models.some((m) => m.startsWith("gemini:")) ? "; Gemini cost depends on your plan (free tier is rate-limited; the runner backs off)." : ".")
+    );
 
     vi.useFakeTimers(FAKE_TIMERS);
     const captures = new Map<string, BenchCapture>();
@@ -144,19 +155,19 @@ describe.runIf(env.SYNTH_LIVE === "1")("live descriptor synthesis", () => {
 
     mkdirSync(outDir, { recursive: true });
     const results: SynthResult[] = [];
-    for (const m of models) {
-      const provider = new AnthropicProvider(m, effort);
+    for (const provider of providers) {
+      const dir = resolve(outDir, provider.model.replace(/[^a-z0-9.-]+/gi, "_"));
+      mkdirSync(dir, { recursive: true });
       for (const d of devices) {
         const r = await synthesize(d, captures.get(d.id)!, provider, { maxIterations, oracles });
         results.push(r);
         console.log(reportLine(r));
-        mkdirSync(resolve(outDir, m), { recursive: true });
-        writeFileSync(resolve(outDir, m, `${d.id}.json`), JSON.stringify(r, null, 2) + "\n");
+        writeFileSync(resolve(dir, `${d.id}.json`), JSON.stringify(r, null, 2) + "\n");
       }
     }
 
     const lines = [`seed ${seed}, oracles ${JSON.stringify(oracles)}, effort ${effort}, max ${maxIterations} iterations`, ...results.map(reportLine)];
-    for (const m of models) {
+    for (const m of providers.map((p) => p.model)) {
       const mine = results.filter((r) => r.model === m);
       const correct = mine.filter((r) => r.score.success).length;
       const cost = mine.reduce((s, r) => s + (r.costUsd ?? 0), 0);
