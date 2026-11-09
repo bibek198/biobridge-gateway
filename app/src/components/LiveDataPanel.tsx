@@ -1,5 +1,6 @@
 import { useAppStore } from "../state/appStore";
 import { Waveform } from "./Waveform";
+import { VOCABULARY } from "../bench/vocabulary";
 import type { AlertSeverity } from "../compute/types";
 import type { ConnectionView } from "../session/sessionManager";
 
@@ -13,6 +14,12 @@ const DERIVED_LABELS: Record<string, string> = {
   spo2_wasm: "SpO2 (firmware DSP in browser)",
   sqi_wasm: "Signal quality (firmware DSP in browser)",
 };
+
+/** Fallback for channels a descriptor did not label (e.g. synthesized ones): the platform vocabulary. */
+function vocabularyLabel(ch: string): string {
+  const d = VOCABULARY[ch]?.description;
+  return d ? d.charAt(0).toUpperCase() + d.slice(1) : ch;
+}
 
 /** Device-computed values arrive as float32; show them at a precision a person can read. */
 function displayValue(v: number): string {
@@ -49,7 +56,7 @@ function DeviceSection({ conn }: { conn: ConnectionView }) {
             const reading = session.getLatest(conn.id, ch);
             return (
               <div key={ch} className={`tile tile-${severity(ch)}`}>
-                <div className="tile-label">{declared.get(ch)?.label ?? DERIVED_LABELS[ch] ?? ch}</div>
+                <div className="tile-label">{declared.get(ch)?.label ?? DERIVED_LABELS[ch] ?? vocabularyLabel(ch)}</div>
                 <div className="tile-value">
                   {reading ? displayValue(reading.value) : "—"}
                   <span className="tile-unit">{reading?.unit ?? ""}</span>

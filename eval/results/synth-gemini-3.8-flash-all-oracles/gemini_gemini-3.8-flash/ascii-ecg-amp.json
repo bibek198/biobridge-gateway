@@ -1,0 +1,100 @@
+{
+  "deviceId": "ascii-ecg-amp",
+  "model": "gemini:gemini-3.8-flash",
+  "oracles": {
+    "structural": true,
+    "plausibility": true,
+    "semantic": true,
+    "cross-sensor": true
+  },
+  "attempts": [
+    {
+      "iteration": 1,
+      "replyText": "```json\n{\n  \"schema\": \"biobridge.descriptor/v1\",\n  \"id\": \"ascii-ecg-amp\",\n  \"name\": \"ECG-200 Lab Amplifier\",\n  \"description\": \"USB-serial ECG amplifier outputting comma-separated ASCII lines with timestamp, ECG in microvolts, and leads-off status.\",\n  \"transport\": {\n    \"kind\": \"serial\",\n    \"baudRate\": 115200\n  },\n  \"framing\": {\n    \"kind\": \"delimited\",\n    \"delimiter\": \"\\n\"\n  },\n  \"text\": {\n    \"separator\": \",\",\n    \"mode\": \"columns\",\n    \"columns\": [\n      {\n        \"index\": 1,\n        \"channel\": \"ecg\",\n        \"scale\": 0.001,\n        \"unit\": \"mV\"\n      },\n      {\n        \"index\": 2,\n        \"channel\": \"leadsOff\"\n      }\n    ]\n  },\n  \"channels\": [\n    {\n      \"id\": \"ecg\",\n      \"label\": \"ECG\",\n      \"unit\": \"mV\",\n      \"display\": \"waveform\"\n    },\n    {\n      \"id\": \"leadsOff\",\n      \"label\": \"Leads Off\",\n      \"display\": \"scalar\"\n    }\n  ]\n}\n```",
+      "stopReason": "end_turn",
+      "outcome": "accepted",
+      "usage": {
+        "inputTokens": 4550,
+        "outputTokens": 2530,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "latencyMs": 325451,
+      "retries": 1,
+      "findings": [],
+      "missingChannels": []
+    }
+  ],
+  "final": {
+    "schema": "biobridge.descriptor/v1",
+    "id": "ascii-ecg-amp",
+    "name": "ECG-200 Lab Amplifier",
+    "description": "USB-serial ECG amplifier outputting comma-separated ASCII lines with timestamp, ECG in microvolts, and leads-off status.",
+    "transport": {
+      "kind": "serial",
+      "baudRate": 115200
+    },
+    "framing": {
+      "kind": "delimited",
+      "delimiter": "\n"
+    },
+    "text": {
+      "separator": ",",
+      "mode": "columns",
+      "columns": [
+        {
+          "index": 1,
+          "channel": "ecg",
+          "scale": 0.001,
+          "unit": "mV"
+        },
+        {
+          "index": 2,
+          "channel": "leadsOff"
+        }
+      ]
+    },
+    "channels": [
+      {
+        "id": "ecg",
+        "label": "ECG",
+        "unit": "mV",
+        "display": "waveform"
+      },
+      {
+        "id": "leadsOff",
+        "label": "Leads Off",
+        "display": "scalar"
+      }
+    ]
+  },
+  "accepted": true,
+  "usage": {
+    "inputTokens": 4550,
+    "outputTokens": 2530,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "costUsd": null,
+  "wallMs": 325477,
+  "score": {
+    "channels": [
+      {
+        "channel": "ecg",
+        "expected": 5997,
+        "decoded": 5997,
+        "matched": 5997,
+        "fraction": 1
+      },
+      {
+        "channel": "leadsOff",
+        "expected": 5997,
+        "decoded": 5997,
+        "matched": 5997,
+        "fraction": 1
+      }
+    ],
+    "fieldAccuracy": 1,
+    "success": true
+  }
+}

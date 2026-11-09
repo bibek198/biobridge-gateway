@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { BENCH_DEVICES } from "../src/bench/devices";
 import { VOCABULARY, withPlatformChannelSemantics } from "../src/bench/vocabulary";
@@ -49,5 +50,26 @@ describe.each(BENCH_DEVICES)("benchmark device $id", (device) => {
     expect(dev.report.checks.filter((c) => c.status === "fail" || c.status === "warn")).toEqual([]);
     expect(v.crossSensor.filter((c) => c.status !== "pass")).toEqual([]);
     expect(v.verdicts.dev).toBe("verified");
+  });
+});
+
+describe("benchmark format vectors (shared with firmware/lib/bbbench)", () => {
+  const vectors = JSON.parse(readFileSync(new URL("../../protocol/test-vectors.json", import.meta.url), "utf8")).bench as Array<{
+    name: string;
+    device: string;
+    hex: string;
+    expect: Record<string, number[]>;
+  }>;
+
+  it.each(vectors)("$name decodes through the $device ground truth", (v) => {
+    const device = BENCH_DEVICES.find((d) => d.id === v.device)!;
+    const bytes = Uint8Array.from(v.hex.match(/../g)!.map((b) => parseInt(b, 16)));
+    const got = new Map<string, number[]>();
+    for (const s of compileDescriptor(device.groundTruth).push(bytes).samples) (got.get(s.channel) ?? got.set(s.channel, []).get(s.channel)!).push(s.value);
+    for (const [ch, want] of Object.entries(v.expect)) {
+      const have = got.get(ch) ?? [];
+      expect(have.length, ch).toBe(want.length);
+      have.forEach((x, i) => expect(x, `${ch}[${i}]`).toBeCloseTo(want[i], 6));
+    }
   });
 });

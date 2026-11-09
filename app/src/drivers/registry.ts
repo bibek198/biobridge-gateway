@@ -1,3 +1,4 @@
+import { BENCH_DEVICES } from "../bench/devices";
 import { DESCRIPTORS } from "../descriptors/library";
 import type { Descriptor } from "../descriptors/types";
 import { BleTransport } from "../transports/bleTransport";
@@ -10,7 +11,7 @@ import {
 } from "../transports/simulatedTransports";
 import type { Transport } from "../transports/types";
 
-export type DeviceGroup = "simulated" | "hardware";
+export type DeviceGroup = "simulated" | "hardware" | "benchmark" | "custom";
 
 export type DeviceFactory = {
   id: string;
@@ -41,6 +42,15 @@ function hardware(id: string, label: string, description: string, descriptor: De
     createTransport: () => hardwareTransport(descriptor),
   };
 }
+
+/** Benchmark devices that firmware/src/bench_device can impersonate (PlatformIO env per device). */
+const BENCH_FIRMWARE = [
+  { deviceId: "fingertip-oximeter", env: "bench_oximeter" },
+  { deviceId: "be-ecg-board", env: "bench_be_ecg" },
+  { deviceId: "bp-monitor", env: "bench_bp" },
+  { deviceId: "float-ppg", env: "bench_float_ppg" },
+  { deviceId: "ascii-ecg-amp", env: "bench_ascii_ecg" },
+];
 
 export const DEVICE_FACTORIES: DeviceFactory[] = [
   {
@@ -100,4 +110,14 @@ export const DEVICE_FACTORIES: DeviceFactory[] = [
     "Any USB-serial device sending line-delimited \"channel,value\" readings at 115200 baud.",
     DESCRIPTORS.genericSerialCsv
   ),
+  // Paper 2 benchmark on hardware: an ESP32 running firmware/ bench_* impersonates a third-party device.
+  // Connecting through the ground-truth descriptor is just for watching it; recordings keep the raw bytes,
+  // which is what descriptor synthesis is evaluated on (SYNTH_CAPTURE, see eval/README.md).
+  ...BENCH_FIRMWARE.map(({ deviceId, env }) => {
+    const d = BENCH_DEVICES.find((b) => b.id === deviceId)!;
+    return {
+      ...hardware(`bench-${d.id}`, `Benchmark · ${d.title}`, `ESP32 flashed with firmware/ ${env}, impersonating this device over USB-serial.`, d.groundTruth),
+      group: "benchmark" as const,
+    };
+  }),
 ];

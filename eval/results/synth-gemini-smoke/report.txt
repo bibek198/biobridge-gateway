@@ -1,0 +1,4 @@
+seed 11, oracles {"structural":true,"plausibility":true,"cross-sensor":true}, effort high, max 4 iterations
+gemini:gemini-3.8-flash fingertip-oximeter   accepted CORRECT acc 100.0%  iters 1  in 8783  out 3053  n/a  854 s
+gemini:gemini-3.8-flash be-ecg-board         accepted CORRECT acc 100.0%  iters 1  in 7958  out 4717  n/a  738 s
+gemini:gemini-3.8-flash: 2/2 correct, mean field accuracy 100.0%, total $0.00

@@ -1,0 +1,211 @@
+{
+  "deviceId": "bp-monitor",
+  "model": "gemini:gemini-3.8-flash",
+  "oracles": {
+    "structural": true,
+    "plausibility": true,
+    "semantic": true,
+    "cross-sensor": true
+  },
+  "attempts": [
+    {
+      "iteration": 1,
+      "replyText": "```json\n{\n  \"schema\": \"biobridge.descriptor/v1\",\n  \"id\": \"bp-monitor\",\n  \"name\": \"BPM-3 Blood Pressure Monitor\",\n  \"description\": \"BPM-3 blood-pressure monitor PC link over RS-232\",\n  \"transport\": {\n    \"kind\": \"serial\",\n    \"baudRate\": 9600\n  },\n  \"framing\": {\n    \"kind\": \"magic-length-crc\",\n    \"magic\": [66, 80],\n    \"lengthOffset\": 2,\n    \"lengthType\": \"u8\",\n    \"headerLength\": 3,\n    \"crc\": {\n      \"kind\": \"crc16-modbus\",\n      \"start\": 0,\n      \"endian\": \"le\"\n    },\n    \"maxFrameLength\": 64\n  },\n  \"messages\": [\n    {\n      \"name\": \"measurement\",\n      \"match\": [\n        {\n          \"offset\": 3,\n          \"type\": \"u8\",\n          \"equals\": 1\n        }\n      ],\n      \"timestamp\": {\n        \"offset\": 4,\n        \"type\": \"u32le\",\n        \"unit\": \"ms\"\n      },\n      \"fields\": [\n        {\n          \"kind\": \"scalar\",\n          \"offset\": 8,\n          \"type\": \"u16le\",\n          \"scale\": 0.1,\n          \"channel\": \"bp_systolic\",\n          \"unit\": \"mmHg\"\n        },\n        {\n          \"kind\": \"scalar\",\n          \"offset\": 10,\n          \"type\": \"u16le\",\n          \"scale\": 0.1,\n          \"channel\": \"bp_diastolic\",\n          \"unit\": \"mmHg\"\n        },\n        {\n          \"kind\": \"scalar\",\n          \"offset\": 12,\n          \"type\": \"u16le\",\n          \"scale\": 0.1,\n          \"channel\": \"bp_mean\",\n          \"unit\": \"mmHg\"\n        },\n        {\n          \"kind\": \"scalar\",\n          \"offset\": 14,\n          \"type\": \"u8\",\n          \"channel\": \"heartRate\",\n          \"unit\": \"bpm\"\n        }\n      ]\n    },\n    {\n      \"name\": \"status\",\n      \"match\": [\n        {\n          \"offset\": 3,\n          \"type\": \"u8\",\n          \"equals\": 2\n        }\n      ],\n      \"timestamp\": {\n        \"offset\": 4,\n        \"type\": \"u32le\",\n        \"unit\": \"ms\"\n      },\n      \"fields\": [\n        {\n          \"kind\": \"scalar\",\n          \"offset\": 8,\n          \"type\": \"u16le\",\n          \"scale\": 0.1,\n          \"channel\": \"cuffPressure\",\n          \"unit\": \"mmHg\"\n        }\n      ]\n    }\n  ],\n  \"channels\": [\n    {\n      \"id\": \"bp_systolic\",\n      \"label\": \"Systolic Blood Pressure\",\n      \"unit\": \"mmHg\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"bp_diastolic\",\n      \"label\": \"Diastolic Blood Pressure\",\n      \"unit\": \"mmHg\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"bp_mean\",\n      \"label\": \"Mean Arterial Pressure\",\n      \"unit\": \"mmHg\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"heartRate\",\n      \"label\": \"Heart Rate\",\n      \"unit\": \"bpm\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"cuffPressure\",\n      \"label\": \"Cuff Pressure\",\n      \"unit\": \"mmHg\",\n      \"display\": \"waveform\"\n    }\n  ]\n}\n```",
+      "stopReason": "end_turn",
+      "outcome": "accepted",
+      "usage": {
+        "inputTokens": 3701,
+        "outputTokens": 3228,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "latencyMs": 1143907,
+      "retries": 3,
+      "findings": [],
+      "missingChannels": []
+    }
+  ],
+  "final": {
+    "schema": "biobridge.descriptor/v1",
+    "id": "bp-monitor",
+    "name": "BPM-3 Blood Pressure Monitor",
+    "description": "BPM-3 blood-pressure monitor PC link over RS-232",
+    "transport": {
+      "kind": "serial",
+      "baudRate": 9600
+    },
+    "framing": {
+      "kind": "magic-length-crc",
+      "magic": [
+        66,
+        80
+      ],
+      "lengthOffset": 2,
+      "lengthType": "u8",
+      "headerLength": 3,
+      "crc": {
+        "kind": "crc16-modbus",
+        "start": 0,
+        "endian": "le"
+      },
+      "maxFrameLength": 64
+    },
+    "messages": [
+      {
+        "name": "measurement",
+        "match": [
+          {
+            "offset": 3,
+            "type": "u8",
+            "equals": 1
+          }
+        ],
+        "timestamp": {
+          "offset": 4,
+          "type": "u32le",
+          "unit": "ms"
+        },
+        "fields": [
+          {
+            "kind": "scalar",
+            "offset": 8,
+            "type": "u16le",
+            "scale": 0.1,
+            "channel": "bp_systolic",
+            "unit": "mmHg"
+          },
+          {
+            "kind": "scalar",
+            "offset": 10,
+            "type": "u16le",
+            "scale": 0.1,
+            "channel": "bp_diastolic",
+            "unit": "mmHg"
+          },
+          {
+            "kind": "scalar",
+            "offset": 12,
+            "type": "u16le",
+            "scale": 0.1,
+            "channel": "bp_mean",
+            "unit": "mmHg"
+          },
+          {
+            "kind": "scalar",
+            "offset": 14,
+            "type": "u8",
+            "channel": "heartRate",
+            "unit": "bpm"
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "match": [
+          {
+            "offset": 3,
+            "type": "u8",
+            "equals": 2
+          }
+        ],
+        "timestamp": {
+          "offset": 4,
+          "type": "u32le",
+          "unit": "ms"
+        },
+        "fields": [
+          {
+            "kind": "scalar",
+            "offset": 8,
+            "type": "u16le",
+            "scale": 0.1,
+            "channel": "cuffPressure",
+            "unit": "mmHg"
+          }
+        ]
+      }
+    ],
+    "channels": [
+      {
+        "id": "bp_systolic",
+        "label": "Systolic Blood Pressure",
+        "unit": "mmHg",
+        "display": "scalar"
+      },
+      {
+        "id": "bp_diastolic",
+        "label": "Diastolic Blood Pressure",
+        "unit": "mmHg",
+        "display": "scalar"
+      },
+      {
+        "id": "bp_mean",
+        "label": "Mean Arterial Pressure",
+        "unit": "mmHg",
+        "display": "scalar"
+      },
+      {
+        "id": "heartRate",
+        "label": "Heart Rate",
+        "unit": "bpm",
+        "display": "scalar"
+      },
+      {
+        "id": "cuffPressure",
+        "label": "Cuff Pressure",
+        "unit": "mmHg",
+        "display": "waveform"
+      }
+    ]
+  },
+  "accepted": true,
+  "usage": {
+    "inputTokens": 3701,
+    "outputTokens": 3228,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "costUsd": null,
+  "wallMs": 1143925,
+  "score": {
+    "channels": [
+      {
+        "channel": "bp_systolic",
+        "expected": 2,
+        "decoded": 2,
+        "matched": 2,
+        "fraction": 1
+      },
+      {
+        "channel": "bp_diastolic",
+        "expected": 2,
+        "decoded": 2,
+        "matched": 2,
+        "fraction": 1
+      },
+      {
+        "channel": "bp_mean",
+        "expected": 2,
+        "decoded": 2,
+        "matched": 2,
+        "fraction": 1
+      },
+      {
+        "channel": "heartRate",
+        "expected": 2,
+        "decoded": 2,
+        "matched": 2,
+        "fraction": 1
+      },
+      {
+        "channel": "cuffPressure",
+        "expected": 29,
+        "decoded": 29,
+        "matched": 29,
+        "fraction": 1
+      }
+    ],
+    "fieldAccuracy": 1,
+    "success": true
+  }
+}

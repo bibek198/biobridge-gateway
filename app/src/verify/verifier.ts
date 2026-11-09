@@ -7,10 +7,12 @@ import type { Descriptor } from "../descriptors/types";
 //   plausibility  — values are physically possible: declared ranges, rate of change, a live (non-flat)
 //                   signal, and a measured sample rate matching what the device announces
 //   cross-sensor  — independent sensors agree on the same physiology (e.g. ECG heart rate vs PPG pulse rate)
+//   semantic      — channels relate to each other the way the physics says (no field decoded twice under
+//                   two names; infrared PPG brighter than red), catching errors that look plausible alone
 // The same code runs live in the app and offline on recordings (to score candidate descriptors).
 
 export type CheckStatus = "pass" | "warn" | "fail" | "pending";
-export type Oracle = "structural" | "plausibility" | "cross-sensor";
+export type Oracle = "structural" | "plausibility" | "semantic" | "cross-sensor";
 export type CheckResult = { id: string; oracle: Oracle; name: string; status: CheckStatus; detail: string };
 export type Verdict = "verified" | "suspect" | "failed" | "pending";
 export type VerificationReport = { verdict: Verdict; checks: CheckResult[] };
@@ -34,6 +36,8 @@ class ChannelStats {
   rateChecked = 0;
   rateViolations = 0;
   distinct = new Set<number>();
+  /** First values, in order, for comparing channels with each other. */
+  head: number[] = [];
   sum = 0;
   sumSq = 0;
   firstDevUs: number | null = null;
@@ -50,6 +54,7 @@ class ChannelStats {
     this.sum += s.value;
     this.sumSq += s.value * s.value;
     if (this.distinct.size < 16) this.distinct.add(s.value);
+    if (this.head.length < 400) this.head.push(s.value);
     if (bounds && ((bounds.min !== undefined && s.value < bounds.min) || (bounds.max !== undefined && s.value > bounds.max))) {
       this.outOfRange++;
     }
@@ -118,7 +123,7 @@ export class StreamVerifier {
   }
 
   report(stats: DecoderStats): VerificationReport {
-    const checks: CheckResult[] = [...this.structural(stats), ...this.plausibility()];
+    const checks: CheckResult[] = [...this.structural(stats), ...this.plausibility(), ...this.semantic()];
     return { verdict: verdictOf(checks), checks };
   }
 
@@ -162,6 +167,39 @@ export class StreamVerifier {
         name: "Sequence continuity",
         status: st.framesOk < 20 ? "pending" : grade(st.seqGaps / (st.framesOk + st.seqGaps)),
         detail: `${st.seqGaps} frames missing`,
+      });
+    }
+    return checks;
+  }
+
+  private semantic(): CheckResult[] {
+    const checks: CheckResult[] = [];
+    const hidden = new Set(this.descriptor.channels.filter((c) => c.display === "hidden").map((c) => c.id));
+    const dups = duplicateChannels(this.channels, hidden);
+    if (this.channels.size >= 2) {
+      checks.push({
+        id: "semantic:distinct-fields",
+        oracle: "semantic",
+        name: "Different channels carry different data",
+        status: dups.length > 0 ? "fail" : "pass",
+        detail: dups.length > 0 ? dups.map(([a, b]) => `${a} and ${b} decode identical values (the same bytes read twice?)`).join("; ") : "no channel duplicates another",
+      });
+    }
+    const ir = this.channels.get("ppg_ir");
+    const red = this.channels.get("ppg_red");
+    if (ir && red && ir.n >= MIN_SAMPLES && red.n >= MIN_SAMPLES) {
+      const irMean = ir.sum / ir.n;
+      const redMean = red.sum / red.n;
+      // A heuristic, not a law (it depends on LED currents), so it warns rather than fails.
+      checks.push({
+        id: "semantic:ppg-wavelengths",
+        oracle: "semantic",
+        name: "Infrared PPG brighter than red",
+        status: irMean > redMean ? "pass" : "warn",
+        detail:
+          irMean > redMean
+            ? `IR mean ${irMean.toFixed(0)} > red mean ${redMean.toFixed(0)}`
+            : `red mean ${redMean.toFixed(0)} ≥ IR mean ${irMean.toFixed(0)}: on skin infrared normally reflects more. Are red and IR swapped?`,
       });
     }
     return checks;
@@ -231,6 +269,24 @@ export class StreamVerifier {
     }
     return checks;
   }
+}
+
+
+/** Pairs of differently named channels that carry the same changing values: one field decoded twice. */
+function duplicateChannels(channels: Map<string, ChannelStats>, hidden: Set<string>): Array<[string, string]> {
+  const live = [...channels].filter(([ch, c]) => !hidden.has(ch) && c.head.length >= 20 && c.distinct.size >= 3);
+  const out: Array<[string, string]> = [];
+  for (let i = 0; i < live.length; i++) {
+    for (let j = i + 1; j < live.length; j++) {
+      const a = live[i][1].head;
+      const b = live[j][1].head;
+      const n = Math.min(a.length, b.length);
+      let same = 0;
+      for (let k = 0; k < n; k++) if (a[k] === b[k]) same++;
+      if (same / n >= 0.95) out.push([live[i][0], live[j][0]]);
+    }
+  }
+  return out;
 }
 
 export function verdictOf(checks: CheckResult[]): Verdict {

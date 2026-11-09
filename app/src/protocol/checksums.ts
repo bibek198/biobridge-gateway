@@ -1,4 +1,4 @@
-import { crc16CcittFalse } from "./frame";
+import { crc16CcittFalse } from "./frame.ts";
 
 // Checksums found in real sensor protocols. Check values ("123456789"): CRC-16/CCITT-FALSE 0x29B1,
 // CRC-16/MODBUS 0x4B37, sum8 0xDD, xor8 0x31.

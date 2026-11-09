@@ -1,0 +1,42 @@
+{
+  "deviceId": "be-ecg-board",
+  "model": "gemini:gemini-3.8-flash",
+  "oracles": {
+    "structural": true,
+    "plausibility": true,
+    "semantic": true,
+    "cross-sensor": true
+  },
+  "attempts": [],
+  "final": null,
+  "accepted": false,
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "costUsd": null,
+  "wallMs": 957553,
+  "score": {
+    "channels": [
+      {
+        "channel": "ecg",
+        "expected": 14975,
+        "decoded": 0,
+        "matched": 0,
+        "fraction": 0
+      },
+      {
+        "channel": "battery",
+        "expected": 5,
+        "decoded": 0,
+        "matched": 0,
+        "fraction": 0
+      }
+    ],
+    "fieldAccuracy": 0,
+    "success": false
+  },
+  "error": "TypeError: fetch failed"
+}

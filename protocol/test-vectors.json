@@ -207,5 +207,123 @@
         "samples": []
       }
     }
+  ],
+  "bench": [
+    {
+      "name": "oximeter",
+      "device": "fingertip-oximeter",
+      "hex": "aa550037614814070d",
+      "expect": {
+        "pleth": [
+          55
+        ],
+        "spo2": [
+          97
+        ],
+        "heartRate": [
+          72
+        ],
+        "perfusion": [
+          2
+        ]
+      }
+    },
+    {
+      "name": "be_ecg_samples",
+      "device": "be-ecg-board",
+      "hex": "5aa500111005000000000960fffce07fffff80000067",
+      "expect": {
+        "ecg": [
+          0,
+          1.2,
+          -0.4,
+          4194.3035,
+          -4194.304
+        ]
+      }
+    },
+    {
+      "name": "be_ecg_status",
+      "device": "be-ecg-board",
+      "hex": "5aa50002205779",
+      "expect": {
+        "battery": [
+          87
+        ]
+      }
+    },
+    {
+      "name": "bp_result",
+      "device": "bp-monitor",
+      "hex": "42500c0140e20100a0040f039503476639",
+      "expect": {
+        "bp_systolic": [
+          118.4
+        ],
+        "bp_diastolic": [
+          78.3
+        ],
+        "bp_mean": [
+          91.7
+        ],
+        "heartRate": [
+          71
+        ]
+      }
+    },
+    {
+      "name": "bp_status",
+      "device": "bp-monitor",
+      "hex": "4250070260e401000d077024",
+      "expect": {
+        "cuffPressure": [
+          180.5
+        ]
+      }
+    },
+    {
+      "name": "imu",
+      "device": "wrist-imu",
+      "hex": "c31188130000023200ecffe803ffff0000803e9ef2",
+      "expect": {
+        "accel_x": [
+          0.05,
+          -0.001
+        ],
+        "accel_y": [
+          -0.02,
+          0
+        ],
+        "accel_z": [
+          1,
+          16
+        ]
+      }
+    },
+    {
+      "name": "float_ppg",
+      "device": "float-ppg",
+      "hex": "a00a110040420f00030000803f48e17a3f9a99813ffbb4",
+      "expect": {
+        "ppg_ir": [
+          1,
+          0.9800000190734863,
+          1.0125000476837158
+        ]
+      }
+    },
+    {
+      "name": "ascii_ecg_line",
+      "device": "ascii-ecg-amp",
+      "hex": "313233342c2d3335302c320d0a",
+      "expect": {
+        "ecg": [
+          -0.35
+        ],
+        "leadsOff": [
+          2
+        ]
+      }
+    }
   ]
 }

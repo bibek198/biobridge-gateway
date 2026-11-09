@@ -46,8 +46,10 @@ type Case = {
   name: string;
   conn: "c1" | "c2";
   descriptor: Descriptor;
-  /** Check ids (prefix match) that must fail; empty = expected to slip through. */
+  /** Check ids (prefix match) that must fail; empty = expected to slip through (or only warn). */
   caughtBy: string[];
+  /** Check ids that must warn (verdict "suspect"): heuristics that flag rather than fail. */
+  warnedBy?: string[];
 };
 
 const cases: Case[] = [
@@ -97,23 +99,33 @@ const cases: Case[] = [
     caughtBy: ["malformed"],
   },
   {
-    name: "Red and IR swapped (known blind spot)",
+    name: "Red and IR swapped (warned by the semantic oracle)",
     conn: "c2",
     descriptor: mutate(DESCRIPTORS.nodeB, (m) => {
       samplesField(m, 0).offset = 17;
       samplesField(m, 1).offset = 14;
     }),
     caughtBy: [],
+    warnedBy: ["semantic:ppg-wavelengths"],
+  },
+  {
+    name: "One PPG field decoded twice under two names",
+    conn: "c2",
+    descriptor: mutate(DESCRIPTORS.nodeB, (m) => (samplesField(m, 0).offset = 17)), // red reads the IR bytes
+    caughtBy: ["semantic:distinct-fields"],
   },
 ];
 
 describe("verifier catches broken descriptors", () => {
-  it.each(cases)("$name", ({ conn, descriptor, caughtBy }) => {
+  it.each(cases)("$name", ({ conn, descriptor, caughtBy, warnedBy }) => {
     const v = verifyRecording(rec, { [conn]: descriptor });
-    const failed = [
-      ...v.connections.find((c) => c.key === conn)!.report.checks,
-      ...v.crossSensor,
-    ].filter((c) => c.status === "fail").map((c) => c.id);
+    const checks = [...v.connections.find((c) => c.key === conn)!.report.checks, ...v.crossSensor];
+    const failed = checks.filter((c) => c.status === "fail").map((c) => c.id);
+    if (warnedBy) {
+      expect(v.verdicts[conn]).toBe("suspect");
+      for (const id of warnedBy) expect(checks.find((c) => c.id === id)?.status, id).toBe("warn");
+      return;
+    }
     if (caughtBy.length === 0) {
       expect(v.verdicts[conn]).toBe("verified");
       return;

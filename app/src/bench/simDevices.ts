@@ -1,12 +1,23 @@
-import { computeChecksum } from "../protocol/checksums";
 import { PayloadWriter } from "../protocol/frame";
+import {
+  ASCII_ECG_HEADER,
+  asciiEcgLine,
+  beEcgSamplesFrame,
+  beEcgStatusFrame,
+  bpResultFrame,
+  bpStatusFrame,
+  floatPpgFrame,
+  imuFrame,
+  oximeterFrame,
+} from "./formats";
 import { hostNowMs } from "../time/clock";
 import { randomDriftPpm, SimDeviceClock, SimulatedTransport, type SimEnv } from "../transports/simulatedTransports";
 
 // Simulated third-party devices for the Paper 2 benchmark. Each speaks a deliberately different protocol
 // (framing, checksum, byte order, scaling, timestamps) and records the physical values it meant to send,
 // so the ground-truth descriptor can be checked against the generator independently (test/bench.test.ts).
-// Generators are hand-written from each device's datasheet, not derived from its descriptor.
+// Generators are hand-written from each device's datasheet (byte formats in formats.ts), not derived from
+// its descriptor.
 
 const encoder = new TextEncoder();
 
@@ -75,11 +86,11 @@ export class AsciiEcgTransport extends BenchDeviceTransport {
   }
 
   protected start(): void {
-    this.deliverAt(hostNowMs(), encoder.encode("t_ms,ecg_uV,lo\r\n"));
+    this.deliverAt(hostNowMs(), encoder.encode(ASCII_ECG_HEADER));
     let lines = "";
     const tick = this.sampler(5000, (deviceUs, hostMs) => {
       const uV = Math.round(this.model.ecgMv(hostMs) * 1000);
-      lines += `${Math.floor(deviceUs / 1000)},${uV},0\r\n`;
+      lines += asciiEcgLine(deviceUs / 1000, uV, 0);
       this.expect("ecg", uV / 1000);
       this.expect("leadsOff", 0);
     });
@@ -107,8 +118,7 @@ export class FixedOximeterTransport extends BenchDeviceTransport {
       const spo2 = Math.round(v.spo2);
       const pr = Math.round(v.hr);
       const pi = 20; // 2.0 % in 0.1 % units
-      const f = Uint8Array.of(0xaa, 0x55, 0x00, pleth, spo2, pr, pi, this.seq++ & 0xff, 0);
-      f[8] = computeChecksum("xor8", f, 2, 8);
+      const f = oximeterFrame({ status: 0, pleth, spo2, pulse: pr, pi10: pi, counter: this.seq++ });
       this.expect("pleth", pleth);
       this.expect("spo2", spo2);
       this.expect("heartRate", pr);
@@ -124,14 +134,6 @@ export class BigEndianEcgTransport extends BenchDeviceTransport {
     return "Simulated big-endian ECG board";
   }
 
-  private frame(payload: Uint8Array): Uint8Array {
-    const f = new Uint8Array(4 + payload.length + 1);
-    f.set([0x5a, 0xa5, payload.length >> 8, payload.length & 0xff]);
-    f.set(payload, 4);
-    f[f.length - 1] = computeChecksum("sum8", f, 2, f.length - 1);
-    return f;
-  }
-
   protected start(): void {
     const batch: number[] = [];
     const tick = this.sampler(2000, (_deviceUs, hostMs) => {
@@ -141,19 +143,11 @@ export class BigEndianEcgTransport extends BenchDeviceTransport {
     });
     this.every(50, () => {
       tick();
-      while (batch.length >= 25) {
-        const part = batch.splice(0, 25);
-        const w = new PayloadWriter().u8(0x10).u8(part.length);
-        for (const r of part) {
-          const u = r < 0 ? r + 0x1000000 : r;
-          w.u8(u >> 16).u8(u >> 8).u8(u); // i24 big-endian
-        }
-        this.sendSerial(this.frame(w.build()));
-      }
+      while (batch.length >= 25) this.sendSerial(beEcgSamplesFrame(batch.splice(0, 25)));
     });
     this.every(5000, () => {
       this.expect("battery", 87);
-      this.sendSerial(this.frame(Uint8Array.of(0x20, 87)));
+      this.sendSerial(beEcgStatusFrame(87));
     });
   }
 }
@@ -164,16 +158,6 @@ export class BpMonitorTransport extends BenchDeviceTransport {
 
   deviceLabel(): string {
     return "Simulated BP monitor";
-  }
-
-  private frame(payload: Uint8Array): Uint8Array {
-    const f = new Uint8Array(3 + payload.length + 2);
-    f.set([0x42, 0x50, payload.length]);
-    f.set(payload, 3);
-    const crc = computeChecksum("crc16-modbus", f, 0, f.length - 2);
-    f[f.length - 2] = crc & 0xff;
-    f[f.length - 1] = crc >> 8;
-    return f;
   }
 
   /** Inflate to 180 mmHg over 3 s, deflate to 0 by 9 s, report at 10 s. */
@@ -191,7 +175,7 @@ export class BpMonitorTransport extends BenchDeviceTransport {
       const tms = Math.floor(this.clock.deviceUs(now) / 1000);
       const cuff = Math.round(this.cuff(now) * 10);
       this.expect("cuffPressure", cuff / 10);
-      this.sendSerial(this.frame(new PayloadWriter().u8(0x02).u32(tms).u16(cuff).build()));
+      this.sendSerial(bpStatusFrame({ uptimeMs: tms, cuff10: cuff }));
       if ((now - this.cycleStart) / 1000 >= 9.5) {
         const v = this.model.vitalsAtTime(now);
         const sys = Math.round(v.bpSys * 10);
@@ -202,7 +186,7 @@ export class BpMonitorTransport extends BenchDeviceTransport {
         this.expect("bp_diastolic", dia / 10);
         this.expect("bp_mean", map / 10);
         this.expect("heartRate", pulse);
-        this.sendSerial(this.frame(new PayloadWriter().u8(0x01).u32(tms).u16(sys).u16(dia).u16(map).u8(pulse).build()));
+        this.sendSerial(bpResultFrame({ uptimeMs: tms, sys10: sys, dia10: dia, map10: map, pulse }));
         this.cycleStart = now + 500;
       }
     });
@@ -230,21 +214,12 @@ export class AccelImuTransport extends BenchDeviceTransport {
       tick();
       while (batch.length >= 5) {
         const part = batch.splice(0, 5);
-        const w = new PayloadWriter().u32(Math.floor(part[0].t / 1000)).u8(part.length);
         for (const p of part) {
-          for (const v of p.xyz) w.i16(v);
           this.expect("accel_x", p.xyz[0] / 1000);
           this.expect("accel_y", p.xyz[1] / 1000);
           this.expect("accel_z", p.xyz[2] / 1000);
         }
-        const payload = w.build();
-        const f = new Uint8Array(2 + payload.length + 2);
-        f.set([0xc3, payload.length]);
-        f.set(payload, 2);
-        const crc = computeChecksum("crc16-ccitt-false", f, 1, f.length - 2);
-        f[f.length - 2] = crc >> 8; // big-endian
-        f[f.length - 1] = crc & 0xff;
-        this.sendNotification(f);
+        this.sendNotification(imuFrame(Math.floor(part[0].t / 1000), part.map((p) => p.xyz)));
       }
     });
   }
@@ -267,22 +242,9 @@ export class FloatPpgTransport extends BenchDeviceTransport {
       tick();
       while (batch.length >= 10) {
         const part = batch.splice(0, 10);
-        const body = new Uint8Array(5 + 4 * part.length);
-        const dv = new DataView(body.buffer);
-        dv.setUint32(0, part[0].t >>> 0, true);
-        body[4] = part.length;
-        part.forEach((p, i) => {
-          dv.setFloat32(5 + 4 * i, p.v, true);
-          this.expect("ppg_ir", p.v);
-        });
-        const f = new Uint8Array(4 + body.length + 2);
-        f.set([0xa0, 0x0a, body.length & 0xff, body.length >> 8]);
-        f.set(body, 4);
-        const crc = computeChecksum("crc16-ccitt-false", f, 2, f.length - 2);
-        f[f.length - 2] = crc & 0xff;
-        f[f.length - 1] = crc >> 8;
+        for (const p of part) this.expect("ppg_ir", p.v);
         // Ready when the batch's last sample is taken.
-        this.sendSerial(f, this.clock.hostMs(part[part.length - 1].t));
+        this.sendSerial(floatPpgFrame(part[0].t, part.map((p) => p.v)), this.clock.hostMs(part[part.length - 1].t));
       }
     });
   }

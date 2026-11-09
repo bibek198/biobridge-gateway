@@ -21,6 +21,8 @@ export type Reply = {
   /** Normalised: "end_turn", "max_tokens", "refusal", or the provider's own reason. */
   stopReason: string | null;
   usage: Usage;
+  /** Retries after rate limits / server errors before this reply (providers that retry themselves). */
+  retries?: number;
 };
 
 export interface LlmProvider {
@@ -142,6 +144,7 @@ export class GeminiProvider implements LlmProvider {
           text: res.text ?? "",
           stopReason:
             finish === "STOP" ? "end_turn" : finish === "MAX_TOKENS" ? "max_tokens" : finish === "SAFETY" || finish === "PROHIBITED_CONTENT" ? "refusal" : finish,
+          retries: attempt,
           usage: {
             inputTokens: (u?.promptTokenCount ?? 0) - cached,
             outputTokens: (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0),
@@ -150,8 +153,10 @@ export class GeminiProvider implements LlmProvider {
           },
         };
       } catch (err) {
-        const retryable = err instanceof ApiError && (err.status === 429 || err.status >= 500);
+        // Rate limits, server errors, and dropped connections (fetch throws a TypeError) are worth retrying.
+        const retryable = (err instanceof ApiError && (err.status === 429 || err.status >= 500)) || (err instanceof TypeError && /fetch failed/i.test(err.message));
         if (!retryable || attempt >= 5) throw err;
+        console.warn(`${this.model}: ${err instanceof ApiError ? `HTTP ${err.status}` : err.message}, retry ${attempt + 1}/5`);
         await sleep(Math.min(60_000, 5_000 * 2 ** attempt));
       }
     }

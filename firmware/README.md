@@ -107,6 +107,27 @@ pio device monitor -e node_b
 - **Node A** ([`src/node_a/main.cpp`](src/node_a/main.cpp)): a hardware timer fires every 4 ms. The ISR timestamps the tick with `esp_timer` and wakes a high-priority task on core 1. That task reads the calibrated ADC and batches 10 samples into one frame. If it ever falls behind by a tick, it closes the batch early, so per-sample timestamps stay correct.
 - **Node B** ([`src/node_b/`](src/node_b/)): a register-level MAX30102 driver ([`max30102.cpp`](src/node_b/max30102.cpp)) configured for SpO2 mode, 100 sps, 18-bit, with an interrupt on every sample. The INT edge timestamps the newest sample; the FIFO is drained and samples are packed to fit one BLE notification at the negotiated MTU. The sensor runs on its own oscillator, so its sample clock drifts against the ESP32 clock. Measuring that drift is part of the Paper 1 work.
 
+## Benchmark devices (Paper 2)
+
+`bench_*` builds turn a bare ESP32 into one of the benchmark's third-party-style devices, using synthetic signals and no sensor. Each build speaks that device's exact byte format over USB-serial, so descriptor synthesis can be evaluated on a real link.
+
+| Env | Impersonates | Baud |
+|---|---|---|
+| `bench_oximeter` | fingertip pulse oximeter (fixed 9-byte frames, XOR) | 19200 |
+| `bench_be_ecg` | ECG front-end board (big-endian, 24-bit, SUM8) | 230400 |
+| `bench_bp` | blood-pressure monitor (CRC-16/MODBUS) | 9600 |
+| `bench_float_ppg` | USB PPG module (float32 samples) | 230400 |
+| `bench_ascii_ecg` | lab ECG amplifier (ASCII columns) | 115200 |
+
+The formats live in [`lib/bbbench`](lib/bbbench/). `pio test -e native` checks them byte for byte against the same golden frames as the app's simulators.
+
+To evaluate synthesis on hardware:
+
+1. Flash a board with a `bench_*` build. Optionally also connect Node A, which gives the cross-sensor check an ECG reference.
+2. Connect the board in the app under **Devices → Benchmark devices**.
+3. Record for about 30 s and export the recording.
+4. Run `SYNTH_CAPTURE=<file> SYNTH_LIVE=1 npm run eval:synth` in `app/`.
+
 ## Compute placement
 
 Both nodes can run the ECG/PPG processing themselves ([`lib/bbdsp`](lib/bbdsp/)). That is the same C library the web app runs as WebAssembly, so device and browser results are directly comparable. Nodes start in **Raw** mode (samples only, as before). Switch modes from the app's **Compute Placement** tab:

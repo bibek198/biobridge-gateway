@@ -318,7 +318,7 @@ The **Clock Sync** tab shows this error live, and an offline evaluator compares 
 
 ### 5.2 Verified, AI-written device descriptors *(Research direction 2)*
 
-Can a language model read a device's datasheet, look at some raw bytes, and write a correct descriptor? Often, but you cannot trust it blindly. So every answer is checked by a **verifier** with three independent "oracles", none of which needs to know the correct answer:
+Can a language model read a device's datasheet, look at some raw bytes, and write a correct descriptor? Often, but you cannot trust it blindly. So every answer is checked by a **verifier** with four independent "oracles", none of which needs to know the correct answer:
 
 ```mermaid
 flowchart TB
@@ -328,10 +328,12 @@ flowchart TB
     VAL -->|yes| RUN["Decode the capture with it"]
     RUN --> O1["Oracle 1: Structural<br/>checksums pass? packets match?"]
     RUN --> O2["Oracle 2: Physical plausibility<br/>values in human range? live signal?<br/>sample rate & spacing right?"]
-    RUN --> O3["Oracle 3: Cross-sensor<br/>does its heart rate agree with<br/>an independent ECG?"]
+    RUN --> O3["Oracle 3: Semantic<br/>do channels relate as physics says?<br/>no field read twice? IR brighter than red?"]
+    RUN --> O4["Oracle 4: Cross-sensor<br/>does its heart rate agree with<br/>an independent ECG?"]
     O1 --> J{"All pass?"}
     O2 --> J
     O3 --> J
+    O4 --> J
     J -->|no: what failed and why| FB
     FB --> LLM
     J -->|yes| ACC["Accepted descriptor"]
@@ -340,7 +342,18 @@ flowchart TB
 
 To measure this properly we built a **benchmark of 10 simulated devices** with deliberately different formats: text and binary, little- and big-endian, length-prefixed and fixed-size frames, four checksum types, 24-bit and floating-point samples, interleaved channels, Bluetooth and serial. Each comes with a vendor-style datasheet and a hidden correct answer.
 
-The loop runs on **Claude** (Opus, Sonnet and Haiku) and **Gemini** models. We also document where the verifier is still blind. For example, swapped red and infrared channels both look physically plausible, which is exactly the kind of case the research has to quantify.
+The loop runs on **Claude** (Opus, Sonnet and Haiku) and **Gemini** models. Some errors look plausible channel by channel. For example, SpO2 read from the pulse-rate byte gives a believable 72%, and swapped red and infrared channels both look like PPG. The **semantic** oracle exists for these: it catches a field decoded twice under two names, and flags red light brighter than infrared, which is unusual on skin. Each oracle can be switched off to measure how much it contributes.
+
+The same loop is in the app's **Add a Device** tab:
+
+1. Capture an unknown device's raw bytes over USB-serial or Bluetooth, or from a simulated benchmark device.
+2. Paste its datasheet and tick the channels you need.
+3. Watch each attempt: what decoded, what the verifier found, and how the model responded.
+4. Save the verified descriptor as a new device.
+
+The model is called from a small local endpoint inside the dev server, so the API key stays on your machine and never reaches the browser page. That endpoint also refuses requests from other websites.
+
+Five of the benchmark devices can also run on **real hardware**: an ESP32 flashed with a `bench_*` firmware build impersonates them byte for byte, so synthesis can be evaluated on captures from a real serial link.
 
 ### 5.3 Compute placement: same code on the sensor and in the browser
 
@@ -384,19 +397,22 @@ biobridge/
 │   │   ├── compute/          Pluggable compute modules (HR, filters, alerts, Wasm DSP)
 │   │   ├── dsp/              bbdsp.wasm (built from firmware/lib/bbdsp) + its TS wrapper
 │   │   ├── verify/           Three-oracle verifier
-│   │   ├── bench/ synth/     Driver benchmark (10 devices) and the LLM synthesis loop
+│   │   ├── bench/ synth/     Driver benchmark (10 devices), the LLM synthesis loop, and its local service
 │   │   ├── placement/        Power model for compute placement
 │   │   ├── session/          Session manager, recorder, recording format
 │   │   ├── sim/              Simulated subject (heartbeat, SpO2, PTT) and sync rig
 │   │   └── components/       Dashboard tabs
+│   ├── vite-plugin-synth.ts  Dev-server endpoint (/api/synth) for the Add a Device tab; keeps API keys server-side
 │   ├── test/                 Vitest suites (unit, end-to-end, evaluation runners)
 │   └── scripts/              Test-vector generator, Wasm build, Gemini model list
 ├── firmware/                 ESP32 firmware (PlatformIO, Arduino-ESP32, FreeRTOS)
 │   ├── lib/bbframe/          Frame encoder/decoder + CRC (portable C)
 │   ├── lib/bbdsp/            Signal-processing library (portable C; also built to Wasm)
+│   ├── lib/bbbench/          Byte formats of the benchmark devices (for the bench_* firmware)
 │   ├── src/node_a/           ECG node (AD8232, USB-serial)
 │   ├── src/node_b/           PPG node (MAX30102, BLE), with its register-level sensor driver
 │   ├── src/node_sync/        Sync-pulse rig
+│   ├── src/bench_device/     An ESP32 impersonating a benchmark device (bench_* builds)
 │   ├── src/common/           Frame sender, sync input, compute-placement logic
 │   └── test/                 Native unit tests (run on your computer)
 ├── protocol/                 Wire-protocol spec + golden test vectors shared by all languages
@@ -423,6 +439,7 @@ A simulated monitor connects automatically. On the **Devices** tab, add *Simulat
 | Tab | What you'll see |
 |---|---|
 | **Devices** | Connections, link health (frames, checksum errors, lost frames), and each device's verification verdict |
+| **Add a Device** | Capture an unknown device, paste its datasheet, and watch a model write and repair its descriptor (needs an API key in `.env`; works only with `npm run dev`) |
 | **Live Data** | ECG and PPG waveforms, heart rate, SpO2 |
 | **Clock Sync** | Choice of sync method and the live sync error between devices |
 | **Compute Placement** | Raw / Edge / Gated / Both modes, traffic, CPU time, device vs browser results |
@@ -440,6 +457,7 @@ pio run -e node_a -t upload      # ECG node (USB)
 pio run -e node_b -t upload      # PPG node (Bluetooth)
 pio run -e node_sync -t upload   # sync-pulse rig
 pio run -e node_a_sim -t upload  # no sensor attached? synthetic signal on a bare board
+pio run -e bench_oximeter -t upload   # impersonate a benchmark device (also bench_be_ecg, bench_bp, ...)
 pio test -e native               # firmware unit tests on your computer
 ```
 
@@ -511,12 +529,12 @@ We try hard not to fool ourselves:
   - ablations that switch off each verifier oracle;
   - a timing study against people writing descriptors by hand;
   - real third-party devices (Bluetooth oximeters, serial instruments);
-  - *semantic* oracles for today's blind spots, e.g. "infrared is brighter than red on a finger".
+  - richer semantic oracles (e.g. SpO2 should not move with pulse rate; ECG polarity) and a measurement of how often each oracle catches real LLM mistakes.
 - **Compute placement:** adaptive placement that switches modes automatically based on battery, link quality and signal quality.
 
 **Product directions**
 
-- A "describe a new device" screen in the app (datasheet in, verified descriptor out), with a small local service for the API key.
+- A hosted version of the Add a Device service, so it works outside `npm run dev`, with per-user keys or a shared, rate-limited service.
 - A shared library of community descriptors.
 - Support for more transports, such as WebUSB and Wi-Fi/MQTT.
 - Exports to medical data standards (IEEE 11073 / HL7 FHIR), so data can flow into health systems.

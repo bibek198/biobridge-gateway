@@ -1,0 +1,107 @@
+{
+  "deviceId": "float-ppg",
+  "model": "gemini:gemini-3.8-flash",
+  "oracles": {
+    "structural": true,
+    "plausibility": true,
+    "semantic": true,
+    "cross-sensor": true
+  },
+  "attempts": [
+    {
+      "iteration": 1,
+      "replyText": "```json\n{\n  \"schema\": \"biobridge.descriptor/v1\",\n  \"id\": \"float-ppg\",\n  \"name\": \"OptoPulse USB module\",\n  \"description\": \"Infrared PPG sensor streaming 100 Hz float32 samples in batches of 10\",\n  \"transport\": {\n    \"kind\": \"serial\",\n    \"baudRate\": 230400\n  },\n  \"framing\": {\n    \"kind\": \"magic-length-crc\",\n    \"magic\": [160, 10],\n    \"lengthOffset\": 2,\n    \"lengthType\": \"u16le\",\n    \"headerLength\": 4,\n    \"crc\": {\n      \"kind\": \"crc16-ccitt-false\",\n      \"start\": 2,\n      \"endian\": \"le\"\n    },\n    \"maxFrameLength\": 128\n  },\n  \"messages\": [\n    {\n      \"name\": \"ppg_batch\",\n      \"timestamp\": {\n        \"offset\": 4,\n        \"type\": \"u32le\",\n        \"unit\": \"us\",\n        \"sentAt\": \"send\"\n      },\n      \"fields\": [\n        {\n          \"kind\": \"samples\",\n          \"offset\": 9,\n          \"type\": \"f32le\",\n          \"stride\": 4,\n          \"count\": 10,\n          \"periodUs\": 10000,\n          \"channel\": \"ppg_ir\",\n          \"unit\": \"a.u.\"\n        }\n      ]\n    }\n  ],\n  \"channels\": [\n    {\n      \"id\": \"ppg_ir\",\n      \"label\": \"PPG IR\",\n      \"unit\": \"a.u.\",\n      \"display\": \"waveform\"\n    }\n  ]\n}\n```",
+      "stopReason": "end_turn",
+      "outcome": "accepted",
+      "usage": {
+        "inputTokens": 8838,
+        "outputTokens": 4696,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "latencyMs": 147278,
+      "retries": 1,
+      "findings": [],
+      "missingChannels": []
+    }
+  ],
+  "final": {
+    "schema": "biobridge.descriptor/v1",
+    "id": "float-ppg",
+    "name": "OptoPulse USB module",
+    "description": "Infrared PPG sensor streaming 100 Hz float32 samples in batches of 10",
+    "transport": {
+      "kind": "serial",
+      "baudRate": 230400
+    },
+    "framing": {
+      "kind": "magic-length-crc",
+      "magic": [
+        160,
+        10
+      ],
+      "lengthOffset": 2,
+      "lengthType": "u16le",
+      "headerLength": 4,
+      "crc": {
+        "kind": "crc16-ccitt-false",
+        "start": 2,
+        "endian": "le"
+      },
+      "maxFrameLength": 128
+    },
+    "messages": [
+      {
+        "name": "ppg_batch",
+        "timestamp": {
+          "offset": 4,
+          "type": "u32le",
+          "unit": "us",
+          "sentAt": "send"
+        },
+        "fields": [
+          {
+            "kind": "samples",
+            "offset": 9,
+            "type": "f32le",
+            "stride": 4,
+            "count": 10,
+            "periodUs": 10000,
+            "channel": "ppg_ir",
+            "unit": "a.u."
+          }
+        ]
+      }
+    ],
+    "channels": [
+      {
+        "id": "ppg_ir",
+        "label": "PPG IR",
+        "unit": "a.u.",
+        "display": "waveform"
+      }
+    ]
+  },
+  "accepted": true,
+  "usage": {
+    "inputTokens": 8838,
+    "outputTokens": 4696,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "costUsd": null,
+  "wallMs": 147298,
+  "score": {
+    "channels": [
+      {
+        "channel": "ppg_ir",
+        "expected": 2990,
+        "decoded": 2990,
+        "matched": 2990,
+        "fraction": 1
+      }
+    ],
+    "fieldAccuracy": 1,
+    "success": true
+  }
+}

@@ -1,5 +1,5 @@
 import { useAppStore } from "../state/appStore";
-import { DEVICE_FACTORIES, type DeviceFactory, type DeviceGroup } from "../drivers/registry";
+import type { DeviceFactory, DeviceGroup } from "../drivers/registry";
 import type { SimScenario } from "../sim/physiology";
 import type { ConnectionView } from "../session/sessionManager";
 import type { CheckResult, Verdict } from "../verify/verifier";
@@ -20,6 +20,17 @@ const GROUPS: { group: DeviceGroup; title: string; blurb: string }[] = [
     group: "hardware",
     title: "Hardware",
     blurb: "Requires Chrome or Edge on localhost/HTTPS. The browser shows a device picker on Connect.",
+  },
+  {
+    group: "custom",
+    title: "Your devices",
+    blurb: "Devices added on the Add a Device tab (synthesized or imported descriptors), saved in this browser.",
+  },
+  {
+    group: "benchmark",
+    title: "Benchmark devices (descriptor synthesis on hardware)",
+    blurb:
+      "An ESP32 flashed with a firmware/ bench_* build impersonates a third-party device. Record it on the Recordings tab, then run descriptor synthesis on the export (eval/README.md).",
   },
 ];
 
@@ -49,6 +60,11 @@ function DeviceCard({ factory }: { factory: DeviceFactory }) {
           {active.length > 0 ? "Connect another" : "Connect"}
         </button>
       </div>
+      {factory.group === "custom" && (
+        <button className="secondary-button danger" onClick={() => window.confirm(`Remove "${factory.label}" from your devices?`) && session.removeCustomDevice(factory.id)}>
+          Remove device
+        </button>
+      )}
     </div>
   );
 }
@@ -180,12 +196,12 @@ export function ConnectPanel() {
         </div>
       </section>
 
-      {GROUPS.map(({ group, title, blurb }) => (
+      {GROUPS.filter(({ group }) => group !== "custom" || session.listFactories().some((f) => f.group === "custom")).map(({ group, title, blurb }) => (
         <section className="section" key={group}>
           <h3>{title}</h3>
           <p className="hint">{blurb}</p>
           <div className="driver-cards">
-            {DEVICE_FACTORIES.filter((f) => f.group === group).map((f) => (
+            {session.listFactories().filter((f) => f.group === group).map((f) => (
               <DeviceCard key={f.id} factory={f} />
             ))}
           </div>

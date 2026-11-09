@@ -27,6 +27,11 @@ export type BenchDevice = {
   createTransport(env: SimEnv): Transport;
 };
 
+/** A benchmark device as a synthesis target: the transport is known, the ground truth stays hidden. */
+export function benchTarget(d: BenchDevice) {
+  return { id: d.id, datasheet: d.datasheet, transport: d.groundTruth.transport, requiredChannels: d.requiredChannels, groundTruth: d.groundTruth };
+}
+
 function gt(json: unknown): Descriptor {
   const r = validateDescriptor(json);
   if (!r.ok) throw new Error(`benchmark ground truth invalid:\n${r.errors.join("\n")}`);
@@ -64,6 +69,8 @@ Link: USB-serial, 115200 baud, 8N1. On reset the ESP32 ROM prints a short ASCII 
 - 0x03 SYNC_EVENT: edge u8, gpio u8 (device time = edge time).
 - 0x04 LEADS_OFF: flags u8 (bit0 LO+, bit1 LO−).
 - 0x05 TIME_PROBE: empty payload; device time = time of sending.
+- 0x06 DERIVED (only when on-device processing is enabled): kind u8 (1 R-peak amplitude in mV, 2 heart rate in bpm), value float32. Device time = event time.
+- 0x07 STATS (every 5 s): mode u8, DSP time µs u32, bytes sent u32, period ms u16.
 `,
   },
   {
@@ -80,6 +87,11 @@ Frame header, CRC and frame types are identical to BioBridge Node A (sync 0xB1 0
 
 ## SAMPLES (type 0x02), every 50 ms
 count u8, sample period µs u16 (10000 = 100 Hz), then count × { red u24, IR u24 } (little-endian, interleaved). Values are raw MAX30102 18-bit ADC counts. Device time is the first sample's time; frames are sent as soon as the batch completes.
+
+## Other frames
+- 0x01 HELLO (every 5 s), 0x03 SYNC_EVENT, 0x05 TIME_PROBE: as on Node A.
+- 0x06 DERIVED (only when on-device processing is enabled): kind u8 (3 pulse, 4 pulse rate bpm, 5 SpO2 %, 6 signal quality 0–1), value float32.
+- 0x07 STATS (every 5 s): mode u8, DSP time µs u32, bytes sent u32, period ms u16.
 `,
   },
   {

@@ -1,4 +1,3 @@
-import type { BenchDevice } from "../bench/devices";
 import { withPlatformChannelSemantics } from "../bench/vocabulary";
 import { compileDescriptor } from "../descriptors/compile";
 import type { Descriptor } from "../descriptors/types";
@@ -7,7 +6,7 @@ import type { RecordedChunk, RecordingMeta } from "../session/recording";
 import type { CheckResult, Oracle } from "../verify/verifier";
 import { verifyRecording } from "../verify/verifyRecording";
 import { costUsd, type LlmProvider, type Turn, type Usage } from "./providers";
-import { SYSTEM_PROMPT, taskPrompt } from "./prompt";
+import { SYSTEM_PROMPT, taskPrompt, type SynthTask } from "./prompt";
 import { scoreDescriptor, type SynthScore } from "./score";
 
 // The Paper 2 loop: the model proposes a descriptor; the validator and the verifier (structural,
@@ -16,9 +15,14 @@ import { scoreDescriptor, type SynthScore } from "./score";
 // at the end, and is never part of the feedback.
 
 export type OracleSet = Record<Oracle, boolean>;
-export const ALL_ORACLES: OracleSet = { structural: true, plausibility: true, "cross-sensor": true };
+export const ALL_ORACLES: OracleSet = { structural: true, plausibility: true, semantic: true, "cross-sensor": true };
 
-export type SynthOptions = { maxIterations?: number; oracles?: OracleSet };
+export type SynthOptions = {
+  maxIterations?: number;
+  oracles?: OracleSet;
+  /** Called after every attempt (for live progress in the app). */
+  onAttempt?: (attempt: Attempt) => void;
+};
 
 export type Attempt = {
   iteration: number;
@@ -31,6 +35,9 @@ export type Attempt = {
   missingChannels?: string[];
   feedback?: string;
   usage: Usage;
+  /** Wall time of the model request, including any rate-limit retries. */
+  latencyMs: number;
+  retries: number;
 };
 
 export type SynthResult = {
@@ -44,7 +51,8 @@ export type SynthResult = {
   usage: Usage;
   costUsd: number | null;
   wallMs: number;
-  score: SynthScore;
+  /** Ground-truth score; null for a real device, whose right answer nobody has. */
+  score: SynthScore | null;
   error?: string;
 };
 
@@ -86,7 +94,10 @@ function decodeSummary(d: Descriptor, chunks: RecordedChunk[]): { text: string; 
   return { text: lines.join("\n"), channels: new Set(values.keys()) };
 }
 
-export async function synthesize(device: BenchDevice, capture: Capture, provider: LlmProvider, opts: SynthOptions = {}): Promise<SynthResult> {
+/** A synthesis task, plus the hidden right answer when there is one (benchmark devices). */
+export type SynthTarget = SynthTask & { groundTruth?: Descriptor };
+
+export async function synthesize(device: SynthTarget, capture: Capture, provider: LlmProvider, opts: SynthOptions = {}): Promise<SynthResult> {
   const maxIterations = opts.maxIterations ?? 4;
   const oracles = opts.oracles ?? ALL_ORACLES;
   const deviceChunks = capture.chunks.filter((c) => c.c === "dev");
@@ -101,6 +112,7 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
 
   for (let iteration = 1; iteration <= maxIterations && !accepted; iteration++) {
     let reply;
+    const requestStarted = Date.now();
     try {
       reply = await provider.complete(SYSTEM_PROMPT, turns);
     } catch (e) {
@@ -110,11 +122,20 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
     for (const k of Object.keys(usage) as (keyof Usage)[]) usage[k] += reply.usage[k];
     // Append-only conversation: the assistant turn goes back exactly as received.
     turns.push({ role: "assistant", text: reply.text, native: reply.native });
-    const attempt: Attempt = { iteration, replyText: reply.text, stopReason: reply.stopReason, outcome: "no-json", usage: reply.usage };
+    const attempt: Attempt = {
+      iteration,
+      replyText: reply.text,
+      stopReason: reply.stopReason,
+      outcome: "no-json",
+      usage: reply.usage,
+      latencyMs: Date.now() - requestStarted,
+      retries: reply.retries ?? 0,
+    };
     attempts.push(attempt);
 
     if (reply.stopReason === "refusal") {
       error = "model refused";
+      opts.onAttempt?.(attempt);
       break;
     }
 
@@ -143,6 +164,7 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
         if (findings.length === 0 && missing.length === 0) {
           attempt.outcome = "accepted";
           accepted = true;
+          opts.onAttempt?.(attempt);
           continue;
         }
         attempt.outcome = "rejected";
@@ -157,6 +179,7 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
       }
     }
     attempt.feedback = feedback;
+    opts.onAttempt?.(attempt);
     if (iteration < maxIterations) turns.push({ role: "user", text: feedback });
   }
 
@@ -170,7 +193,7 @@ export async function synthesize(device: BenchDevice, capture: Capture, provider
     usage,
     costUsd: costUsd(provider.model, usage),
     wallMs: Date.now() - started,
-    score: scoreDescriptor(final, device.groundTruth, deviceChunks, device.requiredChannels),
+    score: device.groundTruth ? scoreDescriptor(final, device.groundTruth, deviceChunks, device.requiredChannels) : null,
     error,
   };
 }

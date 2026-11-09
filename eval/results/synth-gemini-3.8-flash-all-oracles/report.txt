@@ -1,0 +1,12 @@
+seed 11, oracles {"structural":true,"plausibility":true,"semantic":true,"cross-sensor":true}, effort high, max 4 iterations
+gemini:gemini-3.8-flash biobridge-node-a     accepted CORRECT acc 100.0%  iters 2  in 28877  out 15422  n/a  685 s  retries 2
+gemini:gemini-3.8-flash biobridge-node-b     accepted CORRECT acc 100.0%  iters 2  in 26078  out 18529  n/a  608 s  retries 0
+gemini:gemini-3.8-flash ble-hrs-strap        accepted CORRECT acc 100.0%  iters 1  in 3442  out 1916  n/a  179 s  retries 0
+gemini:gemini-3.8-flash csv-monitor          accepted CORRECT acc 100.0%  iters 1  in 4139  out 1424  n/a  246 s  retries 0
+gemini:gemini-3.8-flash ascii-ecg-amp        accepted CORRECT acc 100.0%  iters 1  in 4550  out 2530  n/a  325 s  retries 1
+gemini:gemini-3.8-flash fingertip-oximeter   NOT acc. wrong   acc   0.0%  iters 0  in 0  out 0  n/a  921 s  retries 0  ERROR TypeError: fetch failed
+gemini:gemini-3.8-flash be-ecg-board         NOT acc. wrong   acc   0.0%  iters 0  in 0  out 0  n/a  958 s  retries 0  ERROR TypeError: fetch failed
+gemini:gemini-3.8-flash bp-monitor           accepted CORRECT acc 100.0%  iters 1  in 3701  out 3228  n/a  1144 s  retries 3
+gemini:gemini-3.8-flash wrist-imu            accepted CORRECT acc 100.0%  iters 1  in 7142  out 7536  n/a  238 s  retries 0
+gemini:gemini-3.8-flash float-ppg            accepted CORRECT acc 100.0%  iters 1  in 8838  out 4696  n/a  147 s  retries 1
+gemini:gemini-3.8-flash: 8/10 correct, mean field accuracy 80.0%, total $0.00

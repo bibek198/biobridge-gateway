@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { vi } from "vitest";
 import type { BenchDevice } from "../../src/bench/devices";
 import { BenchDeviceTransport } from "../../src/bench/simDevices";
 import { DESCRIPTORS } from "../../src/descriptors/library";
-import type { RecordedChunk, RecordingMeta } from "../../src/session/recording";
+import { parseRecording, type RecordedChunk, type RecordingMeta } from "../../src/session/recording";
 import { hostNowMs } from "../../src/time/clock";
 import { SimulatedNodeATransport } from "../../src/transports/simulatedTransports";
 import { seedMathRandom } from "./seededRandom";
@@ -52,3 +54,24 @@ export async function benchCapture(device: BenchDevice, durationMs: number, seed
     restore();
   }
 }
+
+/**
+ * Captures from a hardware recording: one per benchmark board in it (factory "bench-<device id>"), renamed to
+ * the "dev"/"ref" keys the loop expects, with a Node A (real or simulated) as the cross-sensor reference.
+ */
+export function capturesFromRecording(path: string): Map<string, BenchCapture> {
+  const { meta, chunks } = parseRecording(readFileSync(resolve(path), "utf8"));
+  const ref = meta.connections.find((c) => c.factoryId === "node-a" || c.factoryId === "sim-node-a");
+  const out = new Map<string, BenchCapture>();
+  for (const c of meta.connections.filter((x) => x.factoryId.startsWith("bench-"))) {
+    const id = c.factoryId.slice("bench-".length);
+    const rename = (k: string) => (k === c.key ? "dev" : "ref");
+    out.set(id, {
+      meta: { ...meta, connections: [c, ...(ref ? [ref] : [])].map((x) => ({ ...x, key: rename(x.key) })) },
+      chunks: chunks.filter((x) => x.c === c.key || x.c === ref?.key).map((x) => ({ ...x, c: rename(x.c) })),
+      intended: null,
+    });
+  }
+  return out;
+}
+

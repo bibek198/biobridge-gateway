@@ -8,6 +8,7 @@ import { RecordingsPanel } from "./components/RecordingsPanel";
 import { AlertLog } from "./components/AlertLog";
 import { SyncPanel } from "./components/SyncPanel";
 import { PlacementPanel } from "./components/PlacementPanel";
+import { NewDevicePanel } from "./components/NewDevicePanel";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         subtitle="Team B19: descriptor-driven gateway for heterogeneous biomedical edge devices"
         tabs={[
           { id: "connect", label: "Devices", content: <ErrorBoundary><ConnectPanel /></ErrorBoundary> },
+          { id: "add", label: "Add a Device", content: <ErrorBoundary><NewDevicePanel /></ErrorBoundary> },
           { id: "live", label: "Live Data", content: <ErrorBoundary><LiveDataPanel /></ErrorBoundary> },
           { id: "sync", label: "Clock Sync", content: <ErrorBoundary><SyncPanel /></ErrorBoundary> },
           { id: "placement", label: "Compute Placement", content: <ErrorBoundary><PlacementPanel /></ErrorBoundary> },

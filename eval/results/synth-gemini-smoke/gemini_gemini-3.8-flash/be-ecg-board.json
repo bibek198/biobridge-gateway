@@ -1,0 +1,139 @@
+{
+  "deviceId": "be-ecg-board",
+  "model": "gemini:gemini-3.8-flash",
+  "oracles": {
+    "structural": true,
+    "plausibility": true,
+    "cross-sensor": true
+  },
+  "attempts": [
+    {
+      "iteration": 1,
+      "replyText": "```json\n{\n  \"schema\": \"biobridge.descriptor/v1\",\n  \"id\": \"be-ecg-board\",\n  \"name\": \"ADS-ECG Eval Board\",\n  \"transport\": {\n    \"kind\": \"serial\",\n    \"baudRate\": 230400\n  },\n  \"framing\": {\n    \"kind\": \"magic-length-crc\",\n    \"magic\": [90, 165],\n    \"lengthOffset\": 2,\n    \"lengthType\": \"u16be\",\n    \"headerLength\": 4,\n    \"crc\": {\n      \"kind\": \"sum8\",\n      \"start\": 2\n    },\n    \"maxFrameLength\": 256\n  },\n  \"messages\": [\n    {\n      \"name\": \"ecg\",\n      \"match\": [\n        {\n          \"offset\": 4,\n          \"type\": \"u8\",\n          \"equals\": 16\n        }\n      ],\n      \"fields\": [\n        {\n          \"kind\": \"samples\",\n          \"channel\": \"ecg\",\n          \"offset\": 6,\n          \"type\": \"i24be\",\n          \"stride\": 3,\n          \"count\": {\n            \"offset\": 5,\n            \"type\": \"u8\"\n          },\n          \"periodUs\": 2000,\n          \"scale\": 0.0005,\n          \"unit\": \"mV\"\n        }\n      ]\n    },\n    {\n      \"name\": \"status\",\n      \"match\": [\n        {\n          \"offset\": 4,\n          \"type\": \"u8\",\n          \"equals\": 32\n        }\n      ],\n      \"fields\": [\n        {\n          \"kind\": \"scalar\",\n          \"channel\": \"battery\",\n          \"offset\": 5,\n          \"type\": \"u8\",\n          \"unit\": \"%\"\n        }\n      ]\n    }\n  ],\n  \"channels\": [\n    {\n      \"id\": \"ecg\",\n      \"label\": \"ECG\",\n      \"unit\": \"mV\",\n      \"display\": \"waveform\"\n    },\n    {\n      \"id\": \"battery\",\n      \"label\": \"Battery\",\n      \"unit\": \"%\",\n      \"display\": \"scalar\"\n    }\n  ]\n}\n```",
+      "stopReason": "end_turn",
+      "outcome": "accepted",
+      "usage": {
+        "inputTokens": 7958,
+        "outputTokens": 4717,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "findings": [],
+      "missingChannels": []
+    }
+  ],
+  "final": {
+    "schema": "biobridge.descriptor/v1",
+    "id": "be-ecg-board",
+    "name": "ADS-ECG Eval Board",
+    "transport": {
+      "kind": "serial",
+      "baudRate": 230400
+    },
+    "framing": {
+      "kind": "magic-length-crc",
+      "magic": [
+        90,
+        165
+      ],
+      "lengthOffset": 2,
+      "lengthType": "u16be",
+      "headerLength": 4,
+      "crc": {
+        "kind": "sum8",
+        "start": 2
+      },
+      "maxFrameLength": 256
+    },
+    "messages": [
+      {
+        "name": "ecg",
+        "match": [
+          {
+            "offset": 4,
+            "type": "u8",
+            "equals": 16
+          }
+        ],
+        "fields": [
+          {
+            "kind": "samples",
+            "channel": "ecg",
+            "offset": 6,
+            "type": "i24be",
+            "stride": 3,
+            "count": {
+              "offset": 5,
+              "type": "u8"
+            },
+            "periodUs": 2000,
+            "scale": 0.0005,
+            "unit": "mV"
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "match": [
+          {
+            "offset": 4,
+            "type": "u8",
+            "equals": 32
+          }
+        ],
+        "fields": [
+          {
+            "kind": "scalar",
+            "channel": "battery",
+            "offset": 5,
+            "type": "u8",
+            "unit": "%"
+          }
+        ]
+      }
+    ],
+    "channels": [
+      {
+        "id": "ecg",
+        "label": "ECG",
+        "unit": "mV",
+        "display": "waveform"
+      },
+      {
+        "id": "battery",
+        "label": "Battery",
+        "unit": "%",
+        "display": "scalar"
+      }
+    ]
+  },
+  "accepted": true,
+  "usage": {
+    "inputTokens": 7958,
+    "outputTokens": 4717,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "costUsd": null,
+  "wallMs": 738387,
+  "score": {
+    "channels": [
+      {
+        "channel": "ecg",
+        "expected": 14975,
+        "decoded": 14975,
+        "matched": 14975,
+        "fraction": 1
+      },
+      {
+        "channel": "battery",
+        "expected": 5,
+        "decoded": 5,
+        "matched": 5,
+        "fraction": 1
+      }
+    ],
+    "fieldAccuracy": 1,
+    "success": true
+  }
+}

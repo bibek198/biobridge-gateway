@@ -1,5 +1,5 @@
 import typesSource from "../descriptors/types.ts?raw";
-import type { BenchDevice } from "../bench/devices";
+import type { TransportSpec } from "../descriptors/types";
 import { VOCABULARY } from "../bench/vocabulary";
 import type { RecordedChunk } from "../session/recording";
 
@@ -71,9 +71,20 @@ export function captureExcerpt(chunks: RecordedChunk[], transportKind: "serial" 
   return `${head}, as hex (offset, 16 bytes per row):\n${rows.join("\n")}`;
 }
 
-export function taskPrompt(device: BenchDevice, deviceChunks: RecordedChunk[]): string {
-  const t = device.groundTruth.transport;
-  const channels = device.requiredChannels
+/**
+ * What the integrator is given: documentation, how the device is connected, and the channels the platform
+ * needs. A benchmark device is one (with a hidden ground truth); so is a real unknown device in the app.
+ */
+export type SynthTask = {
+  id: string;
+  datasheet: string;
+  transport: TransportSpec;
+  requiredChannels: string[];
+};
+
+export function taskPrompt(task: SynthTask, deviceChunks: RecordedChunk[]): string {
+  const t = task.transport;
+  const channels = task.requiredChannels
     .map((id) => {
       const v = VOCABULARY[id];
       return `- ${id}${v.unit ? ` (${v.unit})` : ""}: ${v.description}`;
@@ -81,7 +92,7 @@ export function taskPrompt(device: BenchDevice, deviceChunks: RecordedChunk[]): 
     .join("\n");
   return `## Device documentation
 
-${device.datasheet}
+${task.datasheet}
 
 ## Transport (use verbatim)
 
@@ -95,5 +106,5 @@ ${channels}
 
 ${captureExcerpt(deviceChunks, t.kind)}
 
-Write the descriptor. Use "${device.id}" as its id.`;
+Write the descriptor. Use "${task.id}" as its id.`;
 }

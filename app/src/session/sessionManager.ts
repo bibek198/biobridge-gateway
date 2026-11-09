@@ -12,7 +12,14 @@ import type { AlertEvent, ComputeModule } from "../compute/types";
 import type { DecoderStats } from "../descriptors/compile";
 import type { Descriptor } from "../descriptors/types";
 import { DescriptorDriver } from "../drivers/descriptorDriver";
-import { DEVICE_FACTORIES, type DeviceGroup } from "../drivers/registry";
+import { DEVICE_FACTORIES, hardwareTransport, type DeviceFactory, type DeviceGroup } from "../drivers/registry";
+import { BENCH_DEVICES } from "../bench/devices";
+import { DESCRIPTORS } from "../descriptors/library";
+import { BleTransport } from "../transports/bleTransport";
+import { SerialTransport } from "../transports/serialTransport";
+import type { Transport } from "../transports/types";
+import { SimulatedNodeATransport } from "../transports/simulatedTransports";
+import { loadCustomDevices, saveCustomDevices, type CustomDevice } from "./customDevices";
 import type { DeviceReading, DeviceStatus } from "../drivers/types";
 import { PhysiologyModel, type SimScenario } from "../sim/physiology";
 import { SimSyncRig } from "../sim/syncRig";
@@ -30,6 +37,20 @@ const SCALAR_CAPACITY = 240;
 const MAX_ALERTS = 100;
 
 export type ConnectionGroup = DeviceGroup | "replay";
+
+export type CaptureSource =
+  | { kind: "serial"; baudRate: number }
+  | { kind: "ble"; service: string; characteristic: string; namePrefix?: string }
+  | { kind: "sim-bench"; benchId: string };
+
+export type CapturedChunk = { t: number; bytes: Uint8Array };
+
+export type CaptureResult = {
+  chunks: CapturedChunk[];
+  /** Node A ECG captured over the same window, for the cross-sensor oracle. */
+  reference: { label: string; descriptor: Descriptor; chunks: CapturedChunk[] } | null;
+  deviceLabel: string | null;
+};
 
 export type ConnectionView = {
   id: string;
@@ -163,8 +184,90 @@ export class SessionManager {
   // ---- connections --------------------------------------------------------------------------------
 
   /** For hardware factories, call directly from a click handler: the browser device picker needs it. */
+  // ---- device catalogue (built-in + added by the user) ---------------------------------------------
+
+  private custom: CustomDevice[] = loadCustomDevices();
+
+  listFactories(): DeviceFactory[] {
+    return [...DEVICE_FACTORIES, ...this.custom.map((d) => this.customFactory(d))];
+  }
+
+  private customFactory(d: CustomDevice): DeviceFactory {
+    const source = d.source;
+    const bench = source.kind === "sim-bench" ? BENCH_DEVICES.find((b) => b.id === source.benchId) : undefined;
+    return {
+      id: `custom-${d.id}`,
+      label: d.label,
+      description: bench
+        ? `Added descriptor, connected to the simulated ${bench.title}.`
+        : `Added descriptor (${d.descriptor.transport.kind === "serial" ? "USB-serial" : "Bluetooth LE"}).`,
+      group: "custom",
+      descriptor: d.descriptor,
+      isSupported: () => (bench ? true : hardwareTransport(d.descriptor).isSupported()),
+      createTransport: (env) => (bench ? bench.createTransport(env) : hardwareTransport(d.descriptor)),
+    };
+  }
+
+  /** Adds (or replaces) a user device; ids are slugs of the label. */
+  addCustomDevice(label: string, descriptor: Descriptor, source: CustomDevice["source"]): string {
+    const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `device-${Date.now()}`;
+    this.custom = [...this.custom.filter((d) => d.id !== id), { id, label, descriptor, source, addedAt: Date.now() }];
+    saveCustomDevices(this.custom);
+    this.changed();
+    return `custom-${id}`;
+  }
+
+  removeCustomDevice(factoryId: string): void {
+    this.custom = this.custom.filter((d) => `custom-${d.id}` !== factoryId);
+    saveCustomDevices(this.custom);
+    this.changed();
+  }
+
+  // ---- raw capture of an unknown device ------------------------------------------------------------
+
+  /**
+   * Records an unknown device's raw bytes for durationMs, with no descriptor. When a Node A (real or
+   * simulated) is connected, its bytes over the same window come along as the cross-sensor ECG reference;
+   * for a simulated benchmark device, a simulated Node A on the same simulated subject is captured with it.
+   * Call from a click handler: opening hardware shows the browser's device picker.
+   */
+  async capture(source: CaptureSource, durationMs: number): Promise<CaptureResult> {
+    let transport: Transport;
+    let ownRef: Transport | null = null;
+    if (source.kind === "serial") transport = new SerialTransport(source.baudRate);
+    else if (source.kind === "ble") transport = new BleTransport({ kind: "ble", service: source.service, characteristic: source.characteristic, namePrefix: source.namePrefix || undefined });
+    else {
+      const bench = BENCH_DEVICES.find((b) => b.id === source.benchId);
+      if (!bench) throw new Error(`No benchmark device ${source.benchId}`);
+      transport = bench.createTransport({ physiology: this.physiology, rig: this.rig, dsp: this.dsp });
+      ownRef = new SimulatedNodeATransport({ physiology: this.physiology, rig: this.rig, dsp: this.dsp });
+    }
+
+    const chunks: CapturedChunk[] = [];
+    const refChunks: CapturedChunk[] = [];
+    const unsubs = [transport.onChunk((bytes, t) => chunks.push({ t, bytes: bytes.slice() }))];
+    const liveRef = ownRef ? null : [...this.connections.values()].find((c) => c.factoryId === "node-a" || c.factoryId === "sim-node-a");
+    if (ownRef) unsubs.push(ownRef.onChunk((bytes, t) => refChunks.push({ t, bytes: bytes.slice() })));
+    if (liveRef) unsubs.push(liveRef.driver.onRawChunk((bytes, t) => refChunks.push({ t, bytes: bytes.slice() })));
+
+    try {
+      await transport.open();
+      await ownRef?.open();
+      await new Promise((r) => setTimeout(r, durationMs));
+    } finally {
+      for (const u of unsubs) u();
+      await transport.close().catch(() => undefined);
+      await ownRef?.close();
+    }
+    const reference =
+      refChunks.length > 0
+        ? { label: liveRef?.label ?? "Simulated Node A (reference)", descriptor: liveRef?.driver.descriptor ?? DESCRIPTORS.nodeA, chunks: refChunks }
+        : null;
+    return { chunks, reference, deviceLabel: transport.deviceLabel() };
+  }
+
   async connect(factoryId: string): Promise<string> {
-    const factory = DEVICE_FACTORIES.find((f) => f.id === factoryId);
+    const factory = this.listFactories().find((f) => f.id === factoryId);
     if (!factory) throw new Error(`Unknown device type ${factoryId}`);
     // Simulated nodes run the Wasm DSP in edge modes. Hardware must not wait: the device picker needs the click's user gesture.
     if (factory.group === "simulated") await this.dspReady;

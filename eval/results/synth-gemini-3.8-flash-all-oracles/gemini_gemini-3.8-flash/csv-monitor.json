@@ -1,0 +1,128 @@
+{
+  "deviceId": "csv-monitor",
+  "model": "gemini:gemini-3.8-flash",
+  "oracles": {
+    "structural": true,
+    "plausibility": true,
+    "semantic": true,
+    "cross-sensor": true
+  },
+  "attempts": [
+    {
+      "iteration": 1,
+      "replyText": "```json\n{\n  \"schema\": \"biobridge.descriptor/v1\",\n  \"id\": \"csv-monitor\",\n  \"name\": \"Bedside Monitor\",\n  \"description\": \"Bedside monitor streaming ASCII channel-value pairs over serial\",\n  \"transport\": {\n    \"kind\": \"serial\",\n    \"baudRate\": 115200\n  },\n  \"framing\": {\n    \"kind\": \"delimited\",\n    \"delimiter\": \"\\n\"\n  },\n  \"text\": {\n    \"separator\": \",\",\n    \"mode\": \"channel-value\"\n  },\n  \"channels\": [\n    {\n      \"id\": \"ecg\",\n      \"label\": \"ECG\",\n      \"unit\": \"mV\",\n      \"display\": \"waveform\"\n    },\n    {\n      \"id\": \"heartRate\",\n      \"label\": \"Heart Rate\",\n      \"unit\": \"bpm\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"spo2\",\n      \"label\": \"SpO2\",\n      \"unit\": \"%\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"bp_systolic\",\n      \"label\": \"Systolic Blood Pressure\",\n      \"unit\": \"mmHg\",\n      \"display\": \"scalar\"\n    },\n    {\n      \"id\": \"bp_diastolic\",\n      \"label\": \"Diastolic Blood Pressure\",\n      \"unit\": \"mmHg\",\n      \"display\": \"scalar\"\n    }\n  ]\n}\n```",
+      "stopReason": "end_turn",
+      "outcome": "accepted",
+      "usage": {
+        "inputTokens": 4139,
+        "outputTokens": 1424,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "latencyMs": 246188,
+      "retries": 0,
+      "findings": [],
+      "missingChannels": []
+    }
+  ],
+  "final": {
+    "schema": "biobridge.descriptor/v1",
+    "id": "csv-monitor",
+    "name": "Bedside Monitor",
+    "description": "Bedside monitor streaming ASCII channel-value pairs over serial",
+    "transport": {
+      "kind": "serial",
+      "baudRate": 115200
+    },
+    "framing": {
+      "kind": "delimited",
+      "delimiter": "\n"
+    },
+    "text": {
+      "separator": ",",
+      "mode": "channel-value"
+    },
+    "channels": [
+      {
+        "id": "ecg",
+        "label": "ECG",
+        "unit": "mV",
+        "display": "waveform"
+      },
+      {
+        "id": "heartRate",
+        "label": "Heart Rate",
+        "unit": "bpm",
+        "display": "scalar"
+      },
+      {
+        "id": "spo2",
+        "label": "SpO2",
+        "unit": "%",
+        "display": "scalar"
+      },
+      {
+        "id": "bp_systolic",
+        "label": "Systolic Blood Pressure",
+        "unit": "mmHg",
+        "display": "scalar"
+      },
+      {
+        "id": "bp_diastolic",
+        "label": "Diastolic Blood Pressure",
+        "unit": "mmHg",
+        "display": "scalar"
+      }
+    ]
+  },
+  "accepted": true,
+  "usage": {
+    "inputTokens": 4139,
+    "outputTokens": 1424,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0
+  },
+  "costUsd": null,
+  "wallMs": 246211,
+  "score": {
+    "channels": [
+      {
+        "channel": "ecg",
+        "expected": 1500,
+        "decoded": 1500,
+        "matched": 1500,
+        "fraction": 1
+      },
+      {
+        "channel": "heartRate",
+        "expected": 30,
+        "decoded": 30,
+        "matched": 30,
+        "fraction": 1
+      },
+      {
+        "channel": "spo2",
+        "expected": 30,
+        "decoded": 30,
+        "matched": 30,
+        "fraction": 1
+      },
+      {
+        "channel": "bp_systolic",
+        "expected": 10,
+        "decoded": 10,
+        "matched": 10,
+        "fraction": 1
+      },
+      {
+        "channel": "bp_diastolic",
+        "expected": 10,
+        "decoded": 10,
+        "matched": 10,
+        "fraction": 1
+      }
+    ],
+    "fieldAccuracy": 1,
+    "success": true
+  }
+}
