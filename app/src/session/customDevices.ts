@@ -1,7 +1,7 @@
 import type { Descriptor } from "../descriptors/types";
 import { validateDescriptor } from "../descriptors/validate";
 
-// Devices the user added through the "Add a device" tab (synthesized or imported descriptors). Kept in this
+// Devices the user added through the Add a Device page (synthesized or imported descriptors). Kept in this
 // browser's localStorage: a convenience, not the record. Export the descriptor JSON to keep or share it.
 
 export type CustomDeviceSource = { kind: "hardware" } | { kind: "sim-bench"; benchId: string };

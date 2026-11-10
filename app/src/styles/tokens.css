@@ -1,0 +1,145 @@
+/* BioBridge design tokens. Light theme is the default (demos, screenshots); [data-theme="dark"] for the lab.
+   Semantic colours are never the only signal: badges always carry text and/or an icon. */
+
+:root {
+  --font-sans: "Inter", "Inter var", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-base: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --lh: 1.45;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --r-sm: 3px;
+  --r-md: 5px;
+  --control-h: 30px;
+  --sidebar-w: 236px;
+  --sidebar-w-collapsed: 56px;
+
+  /* light */
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;
+  --surface-3: #e9ecf1;
+  --border: #dde1e8;
+  --border-strong: #c3cad5;
+  --text: #141c28;
+  --text-2: #475263;
+  --text-3: #788395;
+  --accent: #2c5a97;
+  --accent-hover: #234a7d;
+  --accent-weak: #e7eef8;
+  --focus: #5b8fd6;
+
+  --shell-bg: #0f1724;
+  --shell-bg-2: #172133;
+  --shell-border: #1f2a3c;
+  --shell-text: #aab5c6;
+  --shell-text-strong: #eef2f7;
+  --shell-muted: #6e7b90;
+
+  --ok: #1d7444;
+  --ok-bg: #e4f3ea;
+  --warn: #935c00;
+  --warn-bg: #fbf0d9;
+  --fail: #b42318;
+  --fail-bg: #fbe8e6;
+  --live: #0b7488;
+  --live-bg: #def1f4;
+  --muted: #667085;
+  --muted-bg: #eef0f3;
+  --model: #6440b8;
+  --model-bg: #efeafb;
+
+  --chart-bg: #ffffff;
+  --chart-grid: #edf0f4;
+  --chart-axis: #8d97a6;
+  --chart-text: #5c6778;
+  --series-1: #2c5a97;
+  --series-2: #c2410c;
+  --series-3: #0b7488;
+  --series-4: #6440b8;
+  --series-5: #4d7c0f;
+  --series-6: #a16207;
+
+  --code-bg: #f6f8fa;
+  --code-text: #1f2937;
+  --code-key: #1f4f8f;
+  --code-string: #1d7444;
+  --code-number: #b4530a;
+  --code-literal: #6440b8;
+  --code-punct: #6b7280;
+
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, 0.16);
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0c1219;
+  --surface: #121a25;
+  --surface-2: #17202d;
+  --surface-3: #1d2836;
+  --border: #243042;
+  --border-strong: #33425a;
+  --text: #e3e8f0;
+  --text-2: #a8b3c4;
+  --text-3: #7b879a;
+  --accent: #6d9cdb;
+  --accent-hover: #86afe6;
+  --accent-weak: #18283d;
+  --focus: #86afe6;
+
+  --shell-bg: #090e15;
+  --shell-bg-2: #121a26;
+  --shell-border: #1a2433;
+
+  --ok: #5cc28a;
+  --ok-bg: #11291d;
+  --warn: #e3a93a;
+  --warn-bg: #2c220e;
+  --fail: #f07167;
+  --fail-bg: #331614;
+  --live: #4cc3d6;
+  --live-bg: #0f2a30;
+  --muted: #8b96a8;
+  --muted-bg: #1b2431;
+  --model: #a78bfa;
+  --model-bg: #221a38;
+
+  --chart-bg: #0f1620;
+  --chart-grid: #1c2633;
+  --chart-axis: #5f6b7d;
+  --chart-text: #93a0b2;
+  --series-1: #6d9cdb;
+  --series-2: #f08a5d;
+  --series-3: #4cc3d6;
+  --series-4: #a78bfa;
+  --series-5: #8fcf5a;
+  --series-6: #e3a93a;
+
+  --code-bg: #0f1620;
+  --code-text: #dbe2ec;
+  --code-key: #8ab4f0;
+  --code-string: #7fd1a0;
+  --code-number: #f5a66b;
+  --code-literal: #c4a8ff;
+  --code-punct: #7b879a;
+
+  --shadow-1: none;
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}

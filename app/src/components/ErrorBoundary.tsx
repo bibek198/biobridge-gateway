@@ -17,9 +17,14 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="error-panel">
-          <strong>This panel hit an error and stopped updating.</strong>
-          <p>{this.state.error.message}</p>
+        <div className="page">
+          <div className="callout fail" role="alert">
+            <div>
+              <strong>This page hit an error and stopped updating.</strong>
+              <div className="mono small">{this.state.error.message}</div>
+              <div className="small">Other pages keep working. Navigate away and back to retry; details are in the browser console.</div>
+            </div>
+          </div>
         </div>
       );
     }

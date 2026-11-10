@@ -7,7 +7,8 @@ import { BENCH_DEVICES, benchTarget, type BenchDevice } from "../src/bench/devic
 import { serializeRecording } from "../src/session/recording";
 import { ALL_ORACLES, extractJson, synthesize, type OracleSet, type SynthResult } from "../src/synth/loop";
 import { captureExcerpt, SYSTEM_PROMPT, taskPrompt } from "../src/synth/prompt";
-import { createProvider, PRICING, ScriptedProvider, type SynthModel } from "../src/synth/providers";
+import { ApiError } from "@google/genai";
+import { createProvider, dailyQuota, PRICING, ScriptedProvider, type SynthModel } from "../src/synth/providers";
 import { benchCapture, capturesFromRecording, type BenchCapture } from "./helpers/benchCapture";
 import { FAKE_TIMERS } from "./helpers/simRecording";
 
@@ -116,6 +117,18 @@ describe("synthesis loop mechanics (scripted model)", () => {
     expect(fromFile.meta.connections.map((c) => c.key)).toEqual(["dev", "ref"]);
   });
 
+  it("recognises Gemini's daily free-tier quota (not worth retrying) and leaves per-minute limits alone", () => {
+    // Shape of the real error the free tier returned (trimmed).
+    const daily = new ApiError({
+      status: 429,
+      message:
+        '{"error":{"code":429,"message":"You exceeded your current quota... limit: 20, model: gemini-3.8-flash ... Please retry in 15h25m20.487192764s.","status":"RESOURCE_EXHAUSTED","details":[{"violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaValue":"20"}]}]}}',
+    });
+    expect(dailyQuota(daily, "gemini-3.8-flash")?.message).toBe("daily request quota for gemini-3.8-flash exhausted (20 requests/day); resets in 15h25m20s");
+    const perMinute = new ApiError({ status: 429, message: '{"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier"}' });
+    expect(dailyQuota(perMinute, "gemini-3.8-flash")).toBeNull();
+  });
+
   it("extracts the last JSON block", () => {
     expect(extractJson('```json\n{"a":1}\n```\nthen\n```json\n{"a":2}\n```')).toEqual({ ok: true, value: { a: 2 } });
   });
@@ -196,8 +209,13 @@ describe.runIf(env.SYNTH_LIVE === "1")("live descriptor synthesis", () => {
       mkdirSync(dir, { recursive: true });
       for (const d of devices) {
         const r = await synthesize(benchTarget(d), captures.get(d.id)!, provider, { maxIterations, oracles });
-        results.push(r);
         console.log(reportLine(r));
+        // An exhausted quota says nothing about the device: keep it out of the results and stop this model.
+        if (r.error?.startsWith("QuotaExhaustedError")) {
+          console.log(`${provider.model}: stopping, ${r.error}. Not recorded: ${d.id} and the remaining devices.`);
+          break;
+        }
+        results.push(r);
         writeFileSync(resolve(dir, `${d.id}.json`), JSON.stringify(r, null, 2) + "\n");
       }
     }

@@ -27,15 +27,34 @@ export interface ClockMapper {
   reset(): void;
   /** Short live state for display, e.g. estimated skew. */
   describe?(): string;
+  /** Current estimate, for display: host time at which the device clock read 0, skew, BLE interval. */
+  estimate?(): ClockEstimate;
 }
+
+export type ClockEstimate = {
+  /** Host epoch ms at device time 0 (the device's boot time on the host clock); null before any data. */
+  bootHostMs: number | null;
+  /** Device clock rate error vs host, ppm; null when the method has no skew model. */
+  skewPpm: number | null;
+  /** Inferred BLE connection interval, ms, when the method models it. */
+  ciMs: number | null;
+  observations: number;
+};
 
 /** Baseline 0: offset from the first observation only. Never corrects drift or a slow first message. */
 export class FirstOffsetMapper implements ClockMapper {
   readonly name = "first-offset";
   private offsetMs: number | null = null;
 
+  private n = 0;
+
   observe(deviceUs: number, hostArrivalMs: number): void {
     this.offsetMs ??= hostArrivalMs - deviceUs / 1000;
+    this.n++;
+  }
+
+  estimate(): ClockEstimate {
+    return { bootHostMs: this.offsetMs, skewPpm: null, ciMs: null, observations: this.n };
   }
 
   toHostMs(deviceUs: number): number {
@@ -65,6 +84,13 @@ export class WindowedMinOffsetMapper implements ClockMapper {
     this.offsets.push(hostArrivalMs - deviceUs / 1000);
     if (this.offsets.length > this.window) this.offsets.shift();
     this.offsetMs = Math.min(...this.offsets);
+    this.n++;
+  }
+
+  private n = 0;
+
+  estimate(): ClockEstimate {
+    return { bootHostMs: this.offsetMs, skewPpm: null, ciMs: null, observations: this.n };
   }
 
   toHostMs(deviceUs: number): number {
@@ -178,6 +204,7 @@ export class LowerHullAffineMapper implements ClockMapper {
     const x = deviceUs / 1000;
     const p = { x, y: hostArrivalMs - this.opts.latencyFloorMs(info.bytes ?? 0) - x, ready: !!info.sentWhenReady };
     this.pts.push(p);
+    this.observed++;
     if (this.opts.bleConnectionBand) {
       this.arrivals.push(hostArrivalMs);
       if (this.arrivals.length > 300) this.arrivals.shift();
@@ -246,6 +273,14 @@ export class LowerHullAffineMapper implements ClockMapper {
     const parts = [this.slope === 0 ? "offset only (collecting span)" : `skew ${this.skewPpm() >= 0 ? "+" : ""}${this.skewPpm().toFixed(1)} ppm`];
     if (this.opts.bleConnectionBand) parts.push(this.ciMs === null ? "CI unknown" : `CI ${this.ciMs} ms`);
     return parts.join(", ");
+  }
+
+  private observed = 0;
+
+  estimate(): ClockEstimate {
+    // Host time at x = 0 on the fitted line, minus the BLE band shift.
+    const boot = this.anchor ? this.anchor.y - this.slope * this.anchor.x - this.bandShift : null;
+    return { bootHostMs: boot, skewPpm: this.anchor && this.slope !== 0 ? this.skewPpm() : null, ciMs: this.ciMs, observations: this.observed };
   }
 
   /** Inferred BLE connection interval, if the band model is on and a grid was found. */

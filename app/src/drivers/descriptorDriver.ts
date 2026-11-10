@@ -1,6 +1,6 @@
 import { compileDescriptor, type Decoder, type DecoderStats } from "../descriptors/compile";
 import type { Descriptor } from "../descriptors/types";
-import { WindowedMinOffsetMapper, type ClockMapper } from "../time/clock";
+import { WindowedMinOffsetMapper, type ClockEstimate, type ClockMapper } from "../time/clock";
 import type { ChunkListener, Transport } from "../transports/types";
 import { BaseDriver, type DeviceMetadata, type DriverKind } from "./types";
 
@@ -50,6 +50,10 @@ export class DescriptorDriver extends BaseDriver {
 
   getClockDetail(): string | null {
     return this.clock.describe?.() ?? null;
+  }
+
+  getClockEstimate(): ClockEstimate | null {
+    return this.clock.estimate?.() ?? null;
   }
 
   /** Sends one of the descriptor's commands (e.g. "mode-edge") to the device. */

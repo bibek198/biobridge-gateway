@@ -1,32 +1,64 @@
+import type { ReactNode } from "react";
 import { AppStoreProvider } from "./state/appStore";
+import { useRoute, type PageId } from "./state/router";
+import { AppShell } from "./components/AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Layout } from "./components/Layout";
-import { ConnectPanel } from "./components/ConnectPanel";
-import { LiveDataPanel } from "./components/LiveDataPanel";
-import { PipelinePanel } from "./components/PipelinePanel";
-import { RecordingsPanel } from "./components/RecordingsPanel";
-import { AlertLog } from "./components/AlertLog";
-import { SyncPanel } from "./components/SyncPanel";
-import { PlacementPanel } from "./components/PlacementPanel";
-import { NewDevicePanel } from "./components/NewDevicePanel";
+import { ConfirmProvider } from "./components/ui/ConfirmDialog";
+import { OverviewPage } from "./pages/OverviewPage";
+import { DevicesPage } from "./pages/DevicesPage";
+import { LiveDataPage } from "./pages/LiveDataPage";
+import { AlertsPage } from "./pages/AlertsPage";
+import { SyncPage } from "./pages/SyncPage";
+import { PlacementPage } from "./pages/PlacementPage";
+import { RecordingsPage } from "./pages/RecordingsPage";
+import { PipelinePage } from "./pages/PipelinePage";
+import { AddDevicePage } from "./pages/AddDevicePage";
+import { DescriptorsPage } from "./pages/DescriptorsPage";
+import { VerificationPage } from "./pages/VerificationPage";
+
+function page(id: PageId, param: string | null): ReactNode {
+  switch (id) {
+    case "overview":
+      return <OverviewPage />;
+    case "devices":
+      return <DevicesPage param={param} />;
+    case "live":
+      return <LiveDataPage />;
+    case "alerts":
+      return <AlertsPage />;
+    case "sync":
+      return <SyncPage />;
+    case "placement":
+      return <PlacementPage />;
+    case "recordings":
+      return <RecordingsPage param={param} />;
+    case "pipeline":
+      return <PipelinePage />;
+    case "add":
+      return <AddDevicePage />;
+    case "descriptors":
+      return <DescriptorsPage param={param} />;
+    case "verification":
+      return <VerificationPage />;
+  }
+}
+
+function Routed() {
+  const { page: id, param } = useRoute();
+  return (
+    <AppShell page={id}>
+      {/* keyed so a crash on one page does not stick to the next */}
+      <ErrorBoundary key={`${id}/${param ?? ""}`}>{page(id, param)}</ErrorBoundary>
+    </AppShell>
+  );
+}
 
 function App() {
   return (
     <AppStoreProvider>
-      <Layout
-        title="BioBridge"
-        subtitle="Team B19: descriptor-driven gateway for heterogeneous biomedical edge devices"
-        tabs={[
-          { id: "connect", label: "Devices", content: <ErrorBoundary><ConnectPanel /></ErrorBoundary> },
-          { id: "add", label: "Add a Device", content: <ErrorBoundary><NewDevicePanel /></ErrorBoundary> },
-          { id: "live", label: "Live Data", content: <ErrorBoundary><LiveDataPanel /></ErrorBoundary> },
-          { id: "sync", label: "Clock Sync", content: <ErrorBoundary><SyncPanel /></ErrorBoundary> },
-          { id: "placement", label: "Compute Placement", content: <ErrorBoundary><PlacementPanel /></ErrorBoundary> },
-          { id: "pipeline", label: "Compute Pipeline", content: <ErrorBoundary><PipelinePanel /></ErrorBoundary> },
-          { id: "recordings", label: "Recordings", content: <ErrorBoundary><RecordingsPanel /></ErrorBoundary> },
-          { id: "alerts", label: "Alert Log", content: <ErrorBoundary><AlertLog /></ErrorBoundary> },
-        ]}
-      />
+      <ConfirmProvider>
+        <Routed />
+      </ConfirmProvider>
     </AppStoreProvider>
   );
 }

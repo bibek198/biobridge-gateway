@@ -4,7 +4,7 @@ import type { ComputeModule, ComputeResult } from "../types";
 
 // Browser-side placement of the firmware's DSP (WebAssembly build of firmware/lib/bbdsp). These modules
 // produce *_wasm channels; a node in EDGE/BOTH mode produces the matching *_edge channels from the same C
-// code running on the ESP32, which is what the Compute Placement tab compares.
+// code running on the ESP32, which is what the Compute Placement page compares.
 
 /** Sample rate from the median spacing of the first readings (device timestamps if present). */
 class RateEstimator {

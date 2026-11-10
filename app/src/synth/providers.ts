@@ -112,6 +112,24 @@ export class AnthropicProvider implements LlmProvider {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** A quota that will not recover within a run (e.g. Gemini free tier: requests per day). Not worth retrying. */
+export class QuotaExhaustedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QuotaExhaustedError";
+  }
+}
+
+/** Gemini signals daily quotas with a 429 whose quota id contains "PerDay" and a retry delay of hours. */
+export function dailyQuota(err: ApiError, model: string): QuotaExhaustedError | null {
+  if (err.status !== 429 || !/PerDay/.test(err.message)) return null;
+  const limit = /"quotaValue":"(\d+)"/.exec(err.message)?.[1];
+  const retry = /retry in ((?:\d+h)?(?:\d+m)?\d+)(?:\.\d+)?s/.exec(err.message)?.[1];
+  return new QuotaExhaustedError(
+    `daily request quota for ${model} exhausted${limit ? ` (${limit} requests/day)` : ""}${retry ? `; resets in ${retry}s` : ""}`
+  );
+}
+
 export class GeminiProvider implements LlmProvider {
   readonly model: string;
   private readonly modelId: string;
@@ -153,6 +171,8 @@ export class GeminiProvider implements LlmProvider {
           },
         };
       } catch (err) {
+        const daily = err instanceof ApiError ? dailyQuota(err, this.modelId) : null;
+        if (daily) throw daily;
         // Rate limits, server errors, and dropped connections (fetch throws a TypeError) are worth retrying.
         const retryable = (err instanceof ApiError && (err.status === 429 || err.status >= 500)) || (err instanceof TypeError && /fetch failed/i.test(err.message));
         if (!retryable || attempt >= 5) throw err;

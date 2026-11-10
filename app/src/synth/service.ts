@@ -8,7 +8,7 @@ import { synthesize, type Attempt } from "./loop";
 import type { SynthTask } from "./prompt";
 import { createProvider, listGeminiModels, SYNTH_MODELS, type LlmProvider } from "./providers";
 
-// Descriptor synthesis as a local service for the app's "Add a device" tab. Runs in Node inside the Vite
+// Descriptor synthesis as a local service for the app's Add a Device page. Runs in Node inside the Vite
 // dev server (vite-plugin-synth.ts), so API keys stay in this process and never reach the browser.
 
 // Keys from the repo-root .env, without overriding the environment.

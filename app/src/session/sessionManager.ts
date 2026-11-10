@@ -24,7 +24,7 @@ import type { DeviceReading, DeviceStatus } from "../drivers/types";
 import { PhysiologyModel, type SimScenario } from "../sim/physiology";
 import { SimSyncRig } from "../sim/syncRig";
 import { RingBuffer } from "../state/ringBuffer";
-import { createClockMapper, DEFAULT_CLOCK_METHOD, hostNowMs, type ClockMethodId } from "../time/clock";
+import { createClockMapper, DEFAULT_CLOCK_METHOD, hostNowMs, type ClockEstimate, type ClockMethodId } from "../time/clock";
 import { PulsePairTracker, type PulsePairSeries } from "../sync/pulsePairs";
 import { summarize, type ErrorStats } from "../sync/stats";
 import { ReplayTransport } from "../transports/replayTransport";
@@ -65,8 +65,34 @@ export type ConnectionView = {
   descriptor: Descriptor;
   clockMapper: string;
   clockDetail: string | null;
+  clock: ClockEstimate | null;
   verification: VerificationReport;
+  /** Where the data comes from: a simulator, real hardware, or a replayed recording. */
+  source: "simulated" | "hardware" | "replay";
+  connectedAt: number;
+  /** Host time of the last chunk received, or null before any. */
+  lastChunkAt: number | null;
+  /** Newest raw chunks as received (for the packet inspector), oldest first. */
+  recentChunks: { t: number; bytes: Uint8Array }[];
+  /** Per channel that produced data: sample count and rate measured from timestamps. */
+  channels: ChannelStatsView[];
 };
+
+export type ChannelStatsView = { id: string; unit?: string; count: number; rateHz: number | null };
+
+export type DiagnosticCategory = "connection" | "packets" | "verification" | "signal" | "sync" | "physiology";
+
+export type Diagnostic = {
+  id: string;
+  category: DiagnosticCategory;
+  severity: "info" | "warning" | "critical";
+  time: number;
+  device: string | null;
+  message: string;
+  context?: string;
+};
+
+export type DescriptorView = { descriptor: Descriptor; source: "bundled" | "user"; factoryIds: string[] };
 
 export type SyncPairView = { key: string; a: string; b: string; stats: ErrorStats; series: PulsePairSeries["points"] };
 
@@ -84,8 +110,15 @@ type Connection = {
   syncGroup: string;
   verifier: StreamVerifier;
   verification: { at: number; report: VerificationReport } | null;
+  connectedAt: number;
+  lastChunkAt: number | null;
+  recent: { t: number; bytes: Uint8Array }[];
+  /** First/last timestamp (device µs when available, else host ms × 1000) and count per channel. */
+  channelTimes: Map<string, { first: number; last: number; n: number; unit?: string }>;
   unsubs: Array<() => void>;
 };
+
+const RECENT_CHUNKS = 8;
 
 const RATE_WINDOW_MS = 15_000;
 
@@ -309,8 +342,69 @@ export class SessionManager {
       descriptor: c.driver.descriptor,
       clockMapper: c.driver.getClockMapperName(),
       clockDetail: c.driver.getClockDetail(),
+      clock: c.driver.getClockEstimate(),
       verification: this.verificationOf(c),
+      source: c.group === "replay" ? "replay" : c.driver.transport.kind === "simulated" ? "simulated" : "hardware",
+      connectedAt: c.connectedAt,
+      lastChunkAt: c.lastChunkAt,
+      recentChunks: [...c.recent],
+      channels: [...c.channelTimes].map(([id, t]) => ({
+        id,
+        unit: t.unit,
+        count: t.n,
+        rateHz: t.n > 10 && t.last > t.first ? ((t.n - 1) * 1e6) / (t.last - t.first) : null,
+      })),
     }));
+  }
+
+  /** Every descriptor the app knows: bundled ones and the user's, with the device types that use each. */
+  listDescriptors(): DescriptorView[] {
+    const out = new Map<string, DescriptorView>();
+    for (const f of this.listFactories()) {
+      const key = `${f.group === "custom" ? "user" : "bundled"}:${f.descriptor.id}`;
+      const v = out.get(key) ?? { descriptor: f.descriptor, source: f.group === "custom" ? ("user" as const) : ("bundled" as const), factoryIds: [] };
+      v.factoryIds.push(f.id);
+      out.set(key, v);
+    }
+    return [...out.values()];
+  }
+
+  /**
+   * Live diagnostics derived from the current state (connection errors, link problems, failed verification,
+   * high sync error, poor signal quality), plus the physiological threshold alerts.
+   */
+  diagnostics(): Diagnostic[] {
+    const now = hostNowMs();
+    const out: Diagnostic[] = [];
+    for (const c of this.listConnections()) {
+      if (c.status === "error") {
+        out.push({ id: `${c.id}:conn`, category: "connection", severity: "critical", time: now, device: c.label, message: "Connection failed", context: c.lastError ?? undefined });
+      }
+      const s = c.stats;
+      const frames = s.framesOk + s.crcErrors + s.malformed;
+      if (frames > 0) {
+        const pct = (n: number) => `${((100 * n) / frames).toFixed(1)}%`;
+        if (s.crcErrors > 0) out.push({ id: `${c.id}:crc`, category: "packets", severity: s.crcErrors / frames > 0.05 ? "critical" : "warning", time: now, device: c.label, message: `${s.crcErrors} checksum failures`, context: `${pct(s.crcErrors)} of frames` });
+        if (s.malformed > 0) out.push({ id: `${c.id}:malformed`, category: "packets", severity: s.malformed / frames > 0.05 ? "critical" : "warning", time: now, device: c.label, message: `${s.malformed} frames matched no message`, context: `${pct(s.malformed)} of frames; the descriptor may be incomplete` });
+        if (s.seqGaps > 0) out.push({ id: `${c.id}:seq`, category: "packets", severity: s.seqGaps / frames > 0.05 ? "critical" : "warning", time: now, device: c.label, message: `${s.seqGaps} frames lost (sequence gaps)` });
+      }
+      for (const ch of c.verification.checks.filter((x) => x.status === "fail" || x.status === "warn")) {
+        out.push({ id: `${c.id}:v:${ch.id}`, category: "verification", severity: ch.status === "fail" ? "critical" : "warning", time: now, device: c.label, message: `${ch.oracle}: ${ch.name}`, context: ch.detail });
+      }
+      for (const ch of ["sqi_edge", "sqi_wasm"]) {
+        const v = this.getLatest(c.id, ch)?.value;
+        if (v !== undefined && v < 0.8) out.push({ id: `${c.id}:${ch}`, category: "signal", severity: "warning", time: now, device: c.label, message: `Low PPG signal quality (${v.toFixed(2)})`, context: ch === "sqi_edge" ? "computed on the device" : "computed in the browser" });
+      }
+    }
+    for (const p of this.listSyncPairs()) {
+      if (p.stats.n >= 10 && p.stats.rmseMs > 2) {
+        out.push({ id: `sync:${p.key}`, category: "sync", severity: p.stats.rmseMs > 5 ? "critical" : "warning", time: now, device: `${p.a} / ${p.b}`, message: `Sync error ${p.stats.rmseMs.toFixed(2)} ms RMS`, context: `last ${p.stats.n} pulse edges` });
+      }
+    }
+    for (const a of this.alerts) {
+      out.push({ id: a.id, category: "physiology", severity: a.severity, time: a.timestamp, device: a.source ?? null, message: a.message });
+    }
+    return out;
   }
 
   /** Recomputed at most once a second: cheap enough for a 15 fps UI, fresh enough to watch. */
@@ -383,12 +477,23 @@ export class SessionManager {
       syncGroup,
       verifier: new StreamVerifier(driver.descriptor),
       verification: null,
+      connectedAt: hostNowMs(),
+      lastChunkAt: null,
+      recent: [],
+      channelTimes: new Map(),
       unsubs: [],
     };
     conn.unsubs = [
       driver.onData((r) => this.handleReading(conn, r)),
       driver.onStatusChange(() => this.changed()),
     ];
+    conn.unsubs.push(
+      driver.onRawChunk((bytes, t) => {
+        conn.lastChunkAt = t;
+        conn.recent.push({ t, bytes: bytes.slice() });
+        if (conn.recent.length > RECENT_CHUNKS) conn.recent.shift();
+      })
+    );
     if (group !== "replay") conn.unsubs.push(driver.onRawChunk((bytes, t) => this.recorder.push(conn.id, bytes, t)));
     this.connections.set(id, conn);
     this.changed();
@@ -406,6 +511,12 @@ export class SessionManager {
   }
 
   private handleReading(conn: Connection, reading: DeviceReading): void {
+    const tUs = reading.deviceTimestampUs ?? reading.timestamp * 1000;
+    const ct = conn.channelTimes.get(reading.channel);
+    if (ct) {
+      ct.last = tUs;
+      ct.n++;
+    } else conn.channelTimes.set(reading.channel, { first: tUs, last: tUs, n: 1, unit: reading.unit });
     if (reading.channel === "syncEvent") this.pulses.add(conn.id, reading.value, reading.timestamp, conn.syncGroup);
     conn.verifier.observe(reading);
     this.record(conn, reading);

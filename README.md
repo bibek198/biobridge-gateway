@@ -161,7 +161,7 @@ flowchart TB
         PIPE["Compute pipeline<br/>incl. bbdsp as Wasm"]
         VER["Verifier"]
         REC["Recorder / replay"]
-        DASH["Dashboard tabs"]
+        DASH["Research UI<br/>(monitor, research,<br/>device integration)"]
     end
     subgraph RES["Research tooling (Node / Python)"]
         direction LR
@@ -314,7 +314,7 @@ flowchart LR
     H --> E["error = mapped(t_A) − mapped(t_B)<br/>(should be 0)"]
 ```
 
-The **Clock Sync** tab shows this error live, and an offline evaluator compares methods on recordings.
+The **Clock Synchronization** page shows this error live (time series, residual histogram, per-device offset and skew), and an offline evaluator compares methods on recordings.
 
 ### 5.2 Verified, AI-written device descriptors *(Research direction 2)*
 
@@ -344,7 +344,7 @@ To measure this properly we built a **benchmark of 10 simulated devices** with d
 
 The loop runs on **Claude** (Opus, Sonnet and Haiku) and **Gemini** models. Some errors look plausible channel by channel. For example, SpO2 read from the pulse-rate byte gives a believable 72%, and swapped red and infrared channels both look like PPG. The **semantic** oracle exists for these: it catches a field decoded twice under two names, and flags red light brighter than infrared, which is unusual on skin. Each oracle can be switched off to measure how much it contributes.
 
-The same loop is in the app's **Add a Device** tab:
+The same loop is in the app's **Add a Device** page, which shows each attempt's model output, schema validation, decoding and independent verification as separate lanes:
 
 1. Capture an unknown device's raw bytes over USB-serial or Bluetooth, or from a simulated benchmark device.
 2. Paste its datasheet and tick the channels you need.
@@ -376,7 +376,7 @@ The app switches each node between four modes at runtime:
 | **Gated** | results, plus samples only when quality is poor | sensor | power saving that still lets someone inspect a bad signal |
 | **Both** | samples and results | both | checking that device and browser agree |
 
-The **Compute Placement** tab shows link traffic, CPU time on each side, a power estimate, and device vs browser results side by side. Power is modelled until the INA219 current-measurement rig replaces the model with measured values.
+The **Compute Placement** page shows link traffic, CPU time on each side, a power estimate, and device vs browser results side by side. Power is modelled until the INA219 current-measurement rig replaces the model with measured values.
 
 ### 5.4 Recordings that stay useful
 
@@ -401,8 +401,10 @@ biobridge/
 │   │   ├── placement/        Power model for compute placement
 │   │   ├── session/          Session manager, recorder, recording format
 │   │   ├── sim/              Simulated subject (heartbeat, SpO2, PTT) and sync rig
-│   │   └── components/       Dashboard tabs
-│   ├── vite-plugin-synth.ts  Dev-server endpoint (/api/synth) for the Add a Device tab; keeps API keys server-side
+│   │   ├── pages/            One component per page (Overview, Devices, Live Data, Clock Sync, ...)
+│   │   ├── components/       App shell, UI primitives, canvas charts
+│   │   └── styles/           Design tokens (light and dark themes) and component styles
+│   ├── vite-plugin-synth.ts  Dev-server endpoint (/api/synth) for the Add a Device page; keeps API keys server-side
 │   ├── test/                 Vitest suites (unit, end-to-end, evaluation runners)
 │   └── scripts/              Test-vector generator, Wasm build, Gemini model list
 ├── firmware/                 ESP32 firmware (PlatformIO, Arduino-ESP32, FreeRTOS)
@@ -434,18 +436,23 @@ npm install
 npm run dev          # open http://localhost:5173
 ```
 
-A simulated monitor connects automatically. On the **Devices** tab, add *Simulated Node A* and *Simulated Node B*, then look at:
+A simulated monitor connects automatically. On **Devices**, connect *Simulated Node A* and *Simulated Node B*. The sidebar groups the pages into three sections (light theme by default; the moon button switches to dark):
 
-| Tab | What you'll see |
+| Page | What you'll see |
 |---|---|
-| **Devices** | Connections, link health (frames, checksum errors, lost frames), and each device's verification verdict |
-| **Add a Device** | Capture an unknown device, paste its datasheet, and watch a model write and repair its descriptor (needs an API key in `.env`; works only with `npm run dev`) |
-| **Live Data** | ECG and PPG waveforms, heart rate, SpO2 |
-| **Clock Sync** | Choice of sync method and the live sync error between devices |
-| **Compute Placement** | Raw / Edge / Gated / Both modes, traffic, CPU time, device vs browser results |
-| **Compute Pipeline** | Which processing modules run; alert thresholds |
-| **Recordings** | Record, replay, export and import sessions |
-| **Alert Log** | Threshold alerts (try the *Desaturation* scenario) |
+| **Overview** | Session metrics, a live architecture diagram that lights up with real data flow, devices and open diagnostics |
+| **Devices** | Connections table (source, link, measured vs announced sample rate, errors, verification); click a row for the inspector: metadata, descriptor, per-channel rates, clock estimate, checks and recent raw packets |
+| **Live Data** | Waveforms with time and amplitude axes and units, vitals labelled with where each value was computed; pause, window and device selection |
+| **Alerts** | Structured diagnostics: link and decoding problems, failed checks, sync error, signal quality, threshold alerts (try the *Desaturation* scenario) |
+| **Clock Synchronization** | Sync method, per-device offset / skew / BLE interval, live pair error over time and its residual histogram |
+| **Compute Placement** | Raw / Edge / Gated / Both modes, link traffic, CPU time on each side, modelled power, device vs browser results |
+| **Recordings** | Record, replay, export and import sessions; each recording opens as an experiment with its devices and ground truth |
+| **Processing Pipeline** | Which processing modules run; alert thresholds |
+| **Add a Device** | Capture an unknown device, inspect its bytes, paste its datasheet, and watch a model propose descriptors that the verifier checks (needs an API key in `.env`; works only with `npm run dev`) |
+| **Device Descriptors** | Every bundled and user-added descriptor, as a summary and highlighted JSON |
+| **Verification** | Per-device reports grouped by oracle, and cross-sensor agreement |
+
+Anything simulated is labelled **Simulated**, and modelled numbers (power) are labelled **Modelled**, so screenshots never pass simulated values off as hardware measurements.
 
 ### 7.2 Flash the boards
 
@@ -572,3 +579,7 @@ This project builds on well-established work, including:
 - open tooling from the PlatformIO, ESP-IDF/Arduino-ESP32, NimBLE, React, Vite and Zig projects.
 
 The research papers based on this work are in preparation. Results are not published here yet.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
